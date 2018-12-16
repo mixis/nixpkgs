@@ -1,35 +1,64 @@
 { stdenv, fetchurl, pkgconfig, pcre, libxml2, zlib, attr, bzip2, which, file
-, openssl, enableMagnet ? false, lua5 ? null
+, openssl, enableMagnet ? false, lua5_1 ? null
 , enableMysql ? false, mysql ? null
+, enableLdap ? false, openldap ? null
+, enableWebDAV ? true, sqlite ? null, libuuid ? null
+, perl
 }:
 
-assert enableMagnet -> lua5 != null;
+assert enableMagnet -> lua5_1 != null;
 assert enableMysql -> mysql != null;
+assert enableLdap -> openldap != null;
+assert enableWebDAV -> sqlite != null;
+assert enableWebDAV -> libuuid != null;
 
 stdenv.mkDerivation rec {
-  name = "lighttpd-1.4.35";
+  name = "lighttpd-1.4.52";
 
   src = fetchurl {
-    url = "http://download.lighttpd.net/lighttpd/releases-1.4.x/${name}.tar.xz";
-    sha256 = "18rh7xyx69xbwl20znnjma1dq5fay0ygjjvpn3gaa7dxrir9nghi";
+    url = "https://download.lighttpd.net/lighttpd/releases-1.4.x/${name}.tar.xz";
+    sha256 = "0r57zp7050qxlwg41xqnqnhw3lrl34cg5zvfbqrwddrhqn8hkg17";
   };
 
-  buildInputs = [ pkgconfig pcre libxml2 zlib attr bzip2 which file openssl ]
-             ++ stdenv.lib.optional enableMagnet lua5
-             ++ stdenv.lib.optional enableMysql mysql;
+  postPatch = ''
+    patchShebangs tests
+  '';
+
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ pcre libxml2 zlib attr bzip2 which file openssl ]
+             ++ stdenv.lib.optional enableMagnet lua5_1
+             ++ stdenv.lib.optional enableMysql mysql.connector-c
+             ++ stdenv.lib.optional enableLdap openldap
+             ++ stdenv.lib.optional enableWebDAV sqlite
+             ++ stdenv.lib.optional enableWebDAV libuuid;
 
   configureFlags = [ "--with-openssl" ]
                 ++ stdenv.lib.optional enableMagnet "--with-lua"
-                ++ stdenv.lib.optional enableMysql "--with-mysql";
+                ++ stdenv.lib.optional enableMysql "--with-mysql"
+                ++ stdenv.lib.optional enableLdap "--with-ldap"
+                ++ stdenv.lib.optional enableWebDAV "--with-webdav-props"
+                ++ stdenv.lib.optional enableWebDAV "--with-webdav-locks";
 
   preConfigure = ''
     sed -i "s:/usr/bin/file:${file}/bin/file:g" configure
   '';
 
+  checkInputs = [ perl ];
+  doCheck = false; # fails 2 tests
+
+  postInstall = ''
+    mkdir -p "$out/share/lighttpd/doc/config"
+    cp -vr doc/config "$out/share/lighttpd/doc/"
+    # Remove files that references needless store paths (dependency bloat)
+    rm "$out/share/lighttpd/doc/config/Makefile"*
+    rm "$out/share/lighttpd/doc/config/conf.d/Makefile"*
+    rm "$out/share/lighttpd/doc/config/vhosts.d/Makefile"*
+  '';
+
   meta = with stdenv.lib; {
     description = "Lightweight high-performance web server";
     homepage = http://www.lighttpd.net/;
-    license = "BSD";
+    license = stdenv.lib.licenses.bsd3;
     platforms = platforms.linux;
     maintainers = [ maintainers.bjornfor ];
   };

@@ -3,41 +3,32 @@
 with lib;
 
 let
-
-  inherit (pkgs) chrony;
-
-  stateDir = "/var/lib/chrony";
-
-  chronyUser = "chrony";
-
   cfg = config.services.chrony;
 
-  configFile = pkgs.writeText "chrony.conf" ''
-    ${toString (map (server: "server " + server + "\n") cfg.servers)}
+  stateDir = "/var/lib/chrony";
+  keyFile = "${stateDir}/chrony.keys";
 
-    ${optionalString cfg.initstepslew.enabled ''
-      initstepslew ${toString cfg.initstepslew.threshold} ${toString (map (server: server + " ") cfg.initstepslew.servers)}
-    ''}
+  configFile = pkgs.writeText "chrony.conf" ''
+    ${concatMapStringsSep "\n" (server: "server " + server) cfg.servers}
+
+    ${optionalString
+      (cfg.initstepslew.enabled && (cfg.servers != []))
+      "initstepslew ${toString cfg.initstepslew.threshold} ${concatStringsSep " " cfg.initstepslew.servers}"
+    }
 
     driftfile ${stateDir}/chrony.drift
+    keyfile ${keyFile}
 
     ${optionalString (!config.time.hardwareClockInLocalTime) "rtconutc"}
 
     ${cfg.extraConfig}
   '';
 
-  chronyFlags = "-m -f ${configFile} -u ${chronyUser}";
-
+  chronyFlags = "-m -u chrony -f ${configFile} ${toString cfg.extraFlags}";
 in
-
 {
-
-  ###### interface
-
   options = {
-
     services.chrony = {
-
       enable = mkOption {
         default = false;
         description = ''
@@ -47,11 +38,7 @@ in
       };
 
       servers = mkOption {
-        default = [
-          "0.pool.ntp.org"
-          "1.pool.ntp.org"
-          "2.pool.ntp.org"
-        ];
+        default = config.networking.timeServers;
         description = ''
           The set of NTP servers from which to synchronise.
         '';
@@ -71,48 +58,72 @@ in
       };
 
       extraConfig = mkOption {
+        type = types.lines;
         default = "";
         description = ''
           Extra configuration directives that should be added to
           <literal>chrony.conf</literal>
         '';
       };
-    };
 
+      extraFlags = mkOption {
+        default = [];
+        example = [ "-s" ];
+        type = types.listOf types.str;
+        description = "Extra flags passed to the chronyd command.";
+      };
+    };
   };
 
-
-  ###### implementation
-
-  config = mkIf config.services.chrony.enable {
-
-    # Make chronyc available in the system path
+  config = mkIf cfg.enable {
     environment.systemPackages = [ pkgs.chrony ];
 
-    users.extraUsers = singleton
-      { name = chronyUser;
+    users.groups = singleton
+      { name = "chrony";
+        gid = config.ids.gids.chrony;
+      };
+
+    users.users = singleton
+      { name = "chrony";
         uid = config.ids.uids.chrony;
+        group = "chrony";
         description = "chrony daemon user";
         home = stateDir;
       };
 
-    jobs.chronyd =
-      { description = "chrony daemon";
+    services.timesyncd.enable = mkForce false;
 
-        wantedBy = [ "ip-up.target" ];
-        partOf = [ "ip-up.target" ];
+    systemd.services.systemd-timedated.environment = { SYSTEMD_TIMEDATED_NTP_SERVICES = "chronyd.service"; };
 
-        path = [ chrony ];
+    systemd.services.chronyd =
+      { description = "chrony NTP daemon";
 
-        preStart =
-          ''
-            mkdir -m 0755 -p ${stateDir}
-            chown ${chronyUser} ${stateDir}
-          '';
+        wantedBy = [ "multi-user.target" ];
+        wants    = [ "time-sync.target" ];
+        before   = [ "time-sync.target" ];
+        after    = [ "network.target" ];
+        conflicts = [ "ntpd.service" "systemd-timesyncd.service" ];
 
-        exec = "chronyd -n ${chronyFlags}";
+        path = [ pkgs.chrony ];
+
+        preStart = ''
+          mkdir -m 0755 -p ${stateDir}
+          touch ${keyFile}
+          chmod 0640 ${keyFile}
+          chown chrony:chrony ${stateDir} ${keyFile}
+        '';
+
+        unitConfig.ConditionCapability = "CAP_SYS_TIME";
+        serviceConfig =
+          { Type = "forking";
+            ExecStart = "${pkgs.chrony}/bin/chronyd ${chronyFlags}";
+
+            ProtectHome = "yes";
+            ProtectSystem = "full";
+            PrivateTmp = "yes";
+
+          };
+
       };
-
   };
-
 }

@@ -1,22 +1,28 @@
-{ fetchurl, stdenv, pkgconfig, perl, libpng, glib /*just passthru*/ }:
+{ stdenv, fetchurl, fetchpatch, pkgconfig, libpng, glib /*just passthru*/ }:
 
 stdenv.mkDerivation rec {
-  name = "pixman-0.32.6";
+  name = "pixman-${version}";
+  version = "0.36.0";
 
   src = fetchurl {
-    url = "http://cairographics.org/releases/${name}.tar.gz";
-    sha256 = "0129g4zdrw5hif5783li7rzcr4vpbc2cfia91azxmsk0h0xx3zix";
+    url = "mirror://xorg/individual/lib/${name}.tar.bz2";
+    sha256 = "1p40fygy9lcn6ypkzh14azksi570brcpr3979bjpff8qk76c14px";
   };
 
-  nativeBuildInputs = [ pkgconfig perl ];
+  nativeBuildInputs = [ pkgconfig ];
 
-  buildInputs = [ libpng ]; # NOT in closure anyway
+  buildInputs = [ libpng ];
+
+  configureFlags = stdenv.lib.optional stdenv.isAarch32 "--disable-arm-iwmmxt";
+
+  doCheck = true;
 
   postInstall = glib.flattenInclude;
 
-  meta = {
+  meta = with stdenv.lib; {
     homepage = http://pixman.org;
     description = "A low-level library for pixel manipulation";
-    license = stdenv.lib.licenses.mit;
+    license = licenses.mit;
+    platforms = platforms.all;
   };
 }

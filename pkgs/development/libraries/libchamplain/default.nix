@@ -1,35 +1,45 @@
-{ fetchurl, stdenv, pkgconfig, glib, gtk3, cairo, clutter, sqlite
-, clutter_gtk, libsoup /*, libmemphis */ }:
+{ fetchurl, stdenv, pkgconfig, glib, gtk3, cairo, sqlite, gnome3
+, clutter-gtk, libsoup, gobject-introspection /*, libmemphis */ }:
 
+let
+  pname = "libchamplain";
+  version = "0.12.16";
+in
 stdenv.mkDerivation rec {
-  name = "libchamplain-0.12.2";
+  name = "${pname}-${version}";
 
   src = fetchurl {
-    url = mirror://gnome/sources/libchamplain/0.12/libchamplain-0.12.2.tar.xz;
-    sha256 = "0bkyzm378gh6qs7grr2vgzrl4z1pi99yysy8iwzdqzs0bs3rfgyj";
+    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
+    sha256 = "13chvc2n074i0jw5jlb8i7cysda4yqx58ca6y3mrlrl9g37k2zja";
   };
 
-  buildInputs = [ pkgconfig ];
+  outputs = [ "out" "dev" ];
 
-  propagatedBuildInputs = [ glib gtk3 cairo clutter_gtk sqlite libsoup ];
+  nativeBuildInputs = [ pkgconfig gobject-introspection ];
 
-  configureFlags = [ "--disable-introspection" ]; # not needed anywhere AFAIK
+  propagatedBuildInputs = [ glib gtk3 cairo clutter-gtk sqlite libsoup ];
 
-  meta = {
-    homepage = http://projects.gnome.org/libchamplain/;
-    license = stdenv.lib.licenses.lgpl2Plus;
+  passthru = {
+    updateScript = gnome3.updateScript {
+      packageName = pname;
+    };
+  };
+
+  meta = with stdenv.lib; {
+    homepage = https://wiki.gnome.org/Projects/libchamplain;
+    license = licenses.lgpl2Plus;
 
     description = "C library providing a ClutterActor to display maps";
 
-    longDescription =
-      '' libchamplain is a C library providing a ClutterActor to display
-         maps.  It also provides a Gtk+ widget to display maps in Gtk+
-         applications.  Python and Perl bindings are also available.  It
-         supports numerous free map sources such as OpenStreetMap,
-         OpenCycleMap, OpenAerialMap, and Maps for free.
-      '';
+    longDescription = ''
+      libchamplain is a C library providing a ClutterActor to display
+       maps.  It also provides a Gtk+ widget to display maps in Gtk+
+       applications.  Python and Perl bindings are also available.  It
+       supports numerous free map sources such as OpenStreetMap,
+       OpenCycleMap, OpenAerialMap, and Maps for free.
+    '';
 
-     maintainers = [ ];
-     platforms = stdenv.lib.platforms.gnu;  # arbitrary choice
+     maintainers = gnome3.maintainers;
+     platforms = platforms.gnu ++ platforms.linux;  # arbitrary choice
   };
 }

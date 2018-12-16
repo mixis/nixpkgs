@@ -1,5 +1,8 @@
-import ./make-test.nix ({ pkgs, ... }: with pkgs.pythonPackages; rec {
+import ./make-test.nix ({ pkgs, ... }: with pkgs.python2Packages; rec {
   name = "blivet";
+  meta = with pkgs.stdenv.lib.maintainers; {
+    maintainers = [ aszlig ];
+  };
 
   machine = {
     environment.systemPackages = [ pkgs.python blivet mock ];
@@ -43,11 +46,6 @@ import ./make-test.nix ({ pkgs, ... }: with pkgs.pythonPackages; rec {
     TMPDIR=/tmp/xchg/bigtmp
     export TMPDIR
 
-    mkPythonPath() {
-      nix-store -qR "$@" \
-        | sed -e 's|$|/lib/${pkgs.python.libPrefix}/site-packages|'
-    }
-
     cp -Rd "${blivet.src}/tests" .
 
     # Skip SELinux tests
@@ -71,10 +69,14 @@ import ./make-test.nix ({ pkgs, ... }: with pkgs.pythonPackages; rec {
     sed -i \
       -e '1i import tempfile' \
       -e 's|_STORE_FILE_PATH = .*|_STORE_FILE_PATH = tempfile.gettempdir()|' \
+      -e 's|DEFAULT_STORE_SIZE = .*|DEFAULT_STORE_SIZE = 409600|' \
       tests/loopbackedtestcase.py
 
-    PYTHONPATH=".:$(mkPythonPath "${blivet}" "${mock}" | paste -sd :)" \
-      python "${pythonTestRunner}"
+    PYTHONPATH=".:$(< "${pkgs.stdenv.mkDerivation {
+      name = "blivet-pythonpath";
+      buildInputs = [ blivet mock ];
+      buildCommand = "echo \"$PYTHONPATH\" > \"$out\"";
+    }}")" python "${pythonTestRunner}"
   '';
 
   testScript = ''

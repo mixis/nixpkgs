@@ -1,21 +1,35 @@
 <chapter xmlns="http://docbook.org/ns/docbook"
          xmlns:xlink="http://www.w3.org/1999/xlink"
          xml:id="chap-contributing">
-
-<title>Contributing</title>
-
-<para>If you make modifications to the manual, it's important to build the manual before contributing:</para>
-
-<orderedlist>
-
-  <listitem><para><command>$ git clone git://github.com/NixOS/nixpkgs.git</command></para></listitem>
-
-  <listitem><para><command>$ cd nixpkgs/pkgs/top-level</command></para></listitem>
-
-  <listitem><para><command>$ nix-build -A tarball release.nix</command></para></listitem>
-  
-  <listitem><para>Inside the built derivation you shall see <literal>manual/index.html</literal> file.</para></listitem>
-
-</orderedlist>
-
+ <title>Contributing to this documentation</title>
+ <para>
+  The DocBook sources of the Nixpkgs manual are in the
+  <filename
+xlink:href="https://github.com/NixOS/nixpkgs/tree/master/doc">doc</filename>
+  subdirectory of the Nixpkgs repository.
+ </para>
+ <para>
+  You can quickly check your edits with <command>make</command>:
+ </para>
+<screen>
+  $ cd /path/to/nixpkgs/doc
+  $ nix-shell
+  [nix-shell]$ make
+</screen>
+ <para>
+  If you experience problems, run <command>make debug</command> to help
+  understand the docbook errors.
+ </para>
+ <para>
+  After making modifications to the manual, it's important to build it before
+  committing. You can do that as follows:
+<screen>
+  $ cd /path/to/nixpkgs/doc
+  $ nix-shell
+  [nix-shell]$ make clean
+  [nix-shell]$ nix-build .
+</screen>
+  If the build succeeds, the manual will be in
+  <filename>./result/share/doc/nixpkgs/manual.html</filename>.
+ </para>
 </chapter>

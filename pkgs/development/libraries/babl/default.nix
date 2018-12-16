@@ -1,16 +1,20 @@
 { stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "babl-0.1.10";
+  name = "babl-0.1.60";
 
   src = fetchurl {
-    url = "ftp://ftp.gtk.org/pub/babl/0.1/${name}.tar.bz2";
-    sha256 = "943fc36ceac7dd25bc928256bc7b535a42989c6b971578146869eee5fe5955f4";
+    url = "https://ftp.gtk.org/pub/babl/0.1/${name}.tar.bz2";
+    sha256 = "0kv0y12j4k9khrxqa7rryfb4ikcnrax6x4nwi70wnz05nv6fxld3";
   };
 
-  meta = { 
+  doCheck = true;
+
+  meta = with stdenv.lib; {
     description = "Image pixel format conversion library";
     homepage = http://gegl.org/babl/;
-    license = stdenv.lib.licenses.gpl3;
+    license = licenses.gpl3;
+    maintainers = with stdenv.lib.maintainers; [ jtojnar ];
+    platforms = platforms.unix;
   };
 }

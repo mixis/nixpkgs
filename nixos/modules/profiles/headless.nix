@@ -1,7 +1,7 @@
 # Common configuration for headless machines (e.g., Amazon EC2
 # instances).
 
-{ config, lib, pkgs, ... }:
+{ lib, ... }:
 
 with lib;
 
@@ -20,4 +20,7 @@ with lib;
 
   # Don't allow emergency mode, because we don't have a console.
   systemd.enableEmergencyMode = false;
+
+  # Being headless, we don't need a GRUB splash image.
+  boot.loader.grub.splashImage = null;
 }

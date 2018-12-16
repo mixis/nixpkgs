@@ -2,12 +2,16 @@
 
 stdenv.mkDerivation rec {
   name    = "minecraft-server-${version}";
-  version = "1.7.10";
+  version = "1.13.2";
 
   src  = fetchurl {
-    url    = "http://s3.amazonaws.com/Minecraft.Download/versions/${version}/minecraft_server.${version}.jar";
-    sha256 = "1z7kf8wm27yq10rnlwlig7c2vc45x3sfbxslw4lxh9201kq70267";
+    # Old url
+    # https://s3.amazonaws.com/Minecraft.Download/versions/${version}/minecraft_server.${version}.jar
+    url    = "https://launcher.mojang.com/v1/objects/3737db93722a9e39eeada7c27e7aca28b144ffa7/server.jar";
+    sha256 = "13h8dxrrgqa1g6sd7aaw26779hcsqsyjm7xm0sknifn54lnamlzz";
   };
+
+  preferLocalBuild = true;
 
   installPhase = ''
     mkdir -p $out/bin $out/lib/minecraft
@@ -28,6 +32,6 @@ stdenv.mkDerivation rec {
     homepage    = "https://minecraft.net";
     license     = stdenv.lib.licenses.unfreeRedistributable;
     platforms   = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.thoughtpolice ];
+    maintainers = [ stdenv.lib.maintainers.thoughtpolice stdenv.lib.maintainers.tomberek ];
   };
 }

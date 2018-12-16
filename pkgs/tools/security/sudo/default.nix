@@ -1,25 +1,40 @@
-{ stdenv, fetchurl, coreutils, pam, groff
-, sendmailPath ? "/var/setuid-wrappers/sendmail"
+{ stdenv, fetchurl, coreutils, pam, groff, sssd
+, sendmailPath ? "/run/wrappers/bin/sendmail"
+, withInsults ? false
+, withSssd ? false
 }:
 
 stdenv.mkDerivation rec {
-  name = "sudo-1.8.11";
+  name = "sudo-1.8.26";
 
   src = fetchurl {
     urls =
       [ "ftp://ftp.sudo.ws/pub/sudo/${name}.tar.gz"
         "ftp://ftp.sudo.ws/pub/sudo/OLD/${name}.tar.gz"
       ];
-    sha256 = "0if82pvmz7m3qkj3sc9yy8mpcd7lmbn0mhrgnd1zpszvnpkps5x3";
+    sha256 = "1qpyyfga8rs02p3186sns8qvh2bzwa48ka845nrcqh83dyd23nj0";
   };
+
+  prePatch = ''
+    # do not set sticky bit in nix store
+    substituteInPlace src/Makefile.in --replace 04755 0755
+  '';
 
   configureFlags = [
     "--with-env-editor"
     "--with-editor=/run/current-system/sw/bin/nano"
-    "--with-rundir=/var/run"
+    "--with-rundir=/run/sudo"
     "--with-vardir=/var/db/sudo"
     "--with-logpath=/var/log/sudo.log"
+    "--with-iologdir=/var/log/sudo-io"
     "--with-sendmail=${sendmailPath}"
+    "--enable-tmpfiles.d=no"
+  ] ++ stdenv.lib.optional withInsults [
+    "--with-insults"
+    "--with-all-insults"
+  ] ++ stdenv.lib.optional withSssd [
+    "--with-sssd"
+    "--with-sssd-lib=${sssd}/lib"
   ];
 
   configureFlagsArray = [
@@ -36,11 +51,14 @@ stdenv.mkDerivation rec {
     installFlags="sudoers_uid=$(id -u) sudoers_gid=$(id -g) sysconfdir=$out/etc rundir=$TMPDIR/dummy vardir=$TMPDIR/dummy"
     '';
 
-  buildInputs = [ coreutils pam groff ];
+  nativeBuildInputs = [ groff ];
+  buildInputs = [ pam ];
 
   enableParallelBuilding = true;
 
-  postInstall = 
+  doCheck = false; # needs root
+
+  postInstall =
     ''
     rm -f $out/share/doc/sudo/ChangeLog
     '';
@@ -48,7 +66,7 @@ stdenv.mkDerivation rec {
   meta = {
     description = "A command to run commands as root";
 
-    longDescription = 
+    longDescription =
       ''
       Sudo (su "do") allows a system administrator to delegate
       authority to give certain users (or groups of users) the ability
@@ -56,10 +74,12 @@ stdenv.mkDerivation rec {
       providing an audit trail of the commands and their arguments.
       '';
 
-    homepage = http://www.sudo.ws/;
+    homepage = https://www.sudo.ws/;
 
-    license = http://www.sudo.ws/sudo/license.html;
+    license = https://www.sudo.ws/sudo/license.html;
 
     maintainers = [ stdenv.lib.maintainers.eelco ];
+
+    platforms = stdenv.lib.platforms.linux;
   };
 }

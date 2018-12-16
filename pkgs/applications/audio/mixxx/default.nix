@@ -1,51 +1,47 @@
-{ stdenv, fetchurl, scons, pkgconfig, qt4, portaudio, portmidi, libusb1
-, libmad, protobuf, libvorbis, taglib, libid3tag, flac, libsndfile, libshout
-, fftw, vampSDK
+{ stdenv, fetchFromGitHub, makeWrapper, chromaprint, fetchpatch
+, fftw, flac, faad2, glibcLocales, mp4v2
+, libid3tag, libmad, libopus, libshout, libsndfile, libusb1, libvorbis
+, opusfile
+, pkgconfig, portaudio, portmidi, protobuf, qt4, rubberband, scons, sqlite
+, taglib, upower, vampSDK
 }:
 
 stdenv.mkDerivation rec {
   name = "mixxx-${version}";
-  version = "1.11.0";
+  version = "2.1.5";
 
-  src = fetchurl {
-    url = "http://downloads.mixxx.org/${name}/${name}-src.tar.gz";
-    sha256 = "0c833gf4169xvpfn7car9vzvwfwl9d3xwmbfsy36cv8ydifip5h0";
+  src = fetchFromGitHub {
+    owner = "mixxxdj";
+    repo = "mixxx";
+    rev = "release-${version}";
+    sha256 = "0h14pwglz03sdmgzviypv1qa1xfjclrnhyqaq5nd60j47h4z39dr";
   };
 
+  nativeBuildInputs = [ makeWrapper ];
+
   buildInputs = [
-    scons pkgconfig qt4 portaudio portmidi libusb1 libmad protobuf libvorbis
-    taglib libid3tag flac libsndfile libshout fftw vampSDK
+    chromaprint fftw flac faad2 glibcLocales mp4v2 libid3tag libmad libopus libshout libsndfile
+    libusb1 libvorbis opusfile pkgconfig portaudio portmidi protobuf qt4
+    rubberband scons sqlite taglib upower vampSDK
   ];
 
   sconsFlags = [
     "build=release"
     "qtdir=${qt4}"
+    "faad=1"
+    "opus=1"
   ];
 
-  postPatch = ''
-    sed -i -e 's/"which /"type -P /' build/depends.py
+  fixupPhase = ''
+    wrapProgram $out/bin/mixxx \
+      --set LOCALE_ARCHIVE ${glibcLocales}/lib/locale/locale-archive;
   '';
 
-  buildPhase = ''
-    runHook preBuild
-    mkdir -p "$out"
-    scons \
-      -j$NIX_BUILD_CORES -l$NIX_BUILD_CORES \
-      $sconsFlags "prefix=$out"
-    runHook postBuild
-  '';
-
-  installPhase = ''
-    runHook preInstall
-    scons $sconsFlags "prefix=$out" install
-    runHook postInstall
-  '';
-
-  meta = {
-    homepage = "http://mixxx.org/";
+  meta = with stdenv.lib; {
+    homepage = https://mixxx.org;
     description = "Digital DJ mixing software";
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = [ stdenv.lib.maintainers.aszlig ];
-    platforms = stdenv.lib.platforms.linux;
+    license = licenses.gpl2Plus;
+    maintainers = [ maintainers.aszlig maintainers.goibhniu maintainers.bfortz ];
+    platforms = platforms.linux;
   };
 }

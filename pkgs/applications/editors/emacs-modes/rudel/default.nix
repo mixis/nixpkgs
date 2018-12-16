@@ -21,8 +21,8 @@ stdenv.mkDerivation
   '';
 
   meta = {
-    homepage = "http://rudel.sourceforge.net/";
-    description = "Rudel is a collaborative editing environment for GNU Emacs";
+    homepage = http://rudel.sourceforge.net/;
+    description = "A collaborative editing environment for GNU Emacs";
     license = "GPL";
   };
 }

@@ -1,16 +1,20 @@
 { stdenv, fetchurl }:
 
 stdenv.mkDerivation {
-  name = "proj-4.5.0";
+  name = "proj-5.2.0";
 
   src = fetchurl {
-    url = ftp://ftp.remotesensing.org/proj/proj-4.5.0.tar.gz;
-    sha256 = "1d2qz0vgp13hkfgaz7hkblhb9w2fh2blbjqz73xdinwc08cmflqv";
+    url = https://download.osgeo.org/proj/proj-5.2.0.tar.gz;
+    sha256 = "0q3ydh2j8qhwlxmnac72pg69rw2znbi5b6k5wama8qmwzycr94gg";
   };
 
-  meta = { 
+  doCheck = stdenv.is64bit;
+
+  meta = with stdenv.lib; {
     description = "Cartographic Projections Library";
-    homepage = http://proj.maptools.org;
-    license = stdenv.lib.licenses.mit;
+    homepage = http://trac.osgeo.org/proj/;
+    license = licenses.mit;
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ vbgl ];
   };
 }

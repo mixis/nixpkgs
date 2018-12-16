@@ -1,52 +1,93 @@
-{ stdenv, fetchurl, buildPythonPackage
-, python, cython, pkgconfig
-, xorg, gtk, glib, pango, cairo, gdk_pixbuf, pygtk, atk, pygobject, pycairo
-, ffmpeg, x264, libvpx, pil, libwebp }:
+{ stdenv, lib, fetchurl, callPackage, substituteAll, python3, pkgconfig
+, xorg, gtk3, glib, pango, cairo, gdk_pixbuf, atk
+, wrapGAppsHook, xorgserver, getopt, xauth, utillinux, which
+, ffmpeg, x264, libvpx, libwebp
+, libfakeXinerama
+, gst_all_1, pulseaudio, gobject-introspection
+, pam }:
 
-buildPythonPackage rec {
-  name = "xpra-0.11.6";
-  namePrefix = "";
+with lib;
+
+let
+  inherit (python3.pkgs) cython buildPythonApplication;
+
+  xf86videodummy = callPackage ./xf86videodummy { };
+in buildPythonApplication rec {
+  pname = "xpra";
+  version = "2.3.4";
 
   src = fetchurl {
-    url = "http://xpra.org/src/${name}.tar.bz2";
-    sha256 = "0n3lr8nrfmrll83lgi1nzalng902wv0dcmcyx4awnman848dxij0";
+    url = "https://xpra.org/src/${pname}-${version}.tar.xz";
+    sha256 = "0wa3kx54himy3i1b2801hlzfilh3cf4kjk40k1cjl0ds28m5hija";
   };
 
+  patches = [
+    (substituteAll {
+      src = ./fix-paths.patch;
+      inherit (xorg) xkeyboardconfig;
+    })
+  ];
+
+  nativeBuildInputs = [ pkgconfig gobject-introspection wrapGAppsHook ];
   buildInputs = [
-    cython pkgconfig
+    cython
 
     xorg.libX11 xorg.renderproto xorg.libXrender xorg.libXi xorg.inputproto xorg.kbproto
     xorg.randrproto xorg.damageproto xorg.compositeproto xorg.xextproto xorg.recordproto
     xorg.xproto xorg.fixesproto xorg.libXtst xorg.libXfixes xorg.libXcomposite xorg.libXdamage
-    xorg.libXrandr
+    xorg.libXrandr xorg.libxkbfile
 
-    pango cairo gdk_pixbuf atk gtk glib
+    pango cairo gdk_pixbuf atk gtk3 glib
 
     ffmpeg libvpx x264 libwebp
+
+    gst_all_1.gstreamer
+    gst_all_1.gst-plugins-base
+    gst_all_1.gst-plugins-good
+    gst_all_1.gst-plugins-bad
+    gst_all_1.gst-libav
+
+    pam
   ];
 
-  propagatedBuildInputs = [
-    pil pygtk pygobject
+  propagatedBuildInputs = with python3.pkgs; [
+    pillow rencode pycrypto cryptography pycups lz4 dbus-python
+    netifaces numpy websockify pygobject3 pycairo gst-python pam
   ];
 
-  # Even after i tried monkey patching, their tests just fail, looks like
-  # they don't have automated testing out of the box? http://xpra.org/trac/ticket/177
+  NIX_CFLAGS_COMPILE = [
+    # error: 'import_cairo' defined but not used
+    "-Wno-error=unused-function"
+  ];
+
+  setupPyBuildFlags = [
+    "--with-Xdummy"
+    "--without-strict"
+    "--with-gtk3"
+    "--without-gtk2"
+  ];
+
+  preFixup = ''
+    gappsWrapperArgs+=(
+      --set XPRA_INSTALL_PREFIX "$out"
+      --prefix LD_LIBRARY_PATH : ${libfakeXinerama}/lib
+      --prefix PATH : ${stdenv.lib.makeBinPath [ getopt xorgserver xauth which utillinux pulseaudio ]}
+    )
+  '';
+
   doCheck = false;
 
-  preBuild = ''
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE $(pkg-config --cflags gtk+-2.0) $(pkg-config --cflags pygtk-2.0) $(pkg-config --cflags xtst)"
-  '';
-  setupPyBuildFlags = ["--enable-Xdummy"];
-
-  preInstall = ''
-    # see https://bitbucket.org/pypa/setuptools/issue/130/install_data-doesnt-respect-prefix
-    ${python}/bin/${python.executable} setup.py install_data --install-dir=$out --root=$out
-    sed -i '/ = data_files/d' setup.py
-  '';
+  passthru = { inherit xf86videodummy; };
 
   meta = {
     homepage = http://xpra.org/;
+    downloadPage = "https://xpra.org/src/";
+    downloadURLRegexp = "xpra-.*[.]tar[.]xz$";
     description = "Persistent remote applications for X";
-    platforms = stdenv.lib.platforms.linux;
+    platforms = platforms.linux;
+    license = licenses.gpl2;
+    # https://github.com/NixOS/nixpkgs/pull/48872#issuecomment-433559636
+    broken = true;
+    maintainers = with maintainers; [ tstrobel offline numinit ];
   };
 }

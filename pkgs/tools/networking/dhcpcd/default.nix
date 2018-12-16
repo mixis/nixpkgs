@@ -1,18 +1,31 @@
-{ stdenv, fetchurl, pkgconfig, udev }:
+{ stdenv, fetchurl, pkgconfig, udev, runtimeShellPackage, runtimeShell }:
 
 stdenv.mkDerivation rec {
-  name = "dhcpcd-6.5.1";
+  # when updating this to >=7, check, see previous reverts:
+  # nix-build -A nixos.tests.networking.scripted.macvlan.x86_64-linux nixos/release-combined.nix
+  name = "dhcpcd-7.0.8";
 
   src = fetchurl {
-    url = "mirror://roy/dhcpcd/${name}.tar.bz2";
-    sha256 = "0y0falxxlahr2i630ydraq4ldr7d5mg8ar0s5np5ddl76w58dlrp";
+    url = "mirror://roy/dhcpcd/${name}.tar.xz";
+    sha256 = "1df95lv3cbs3dk718a2vyvzmv7qhpgcxzagb27ylmav96f48x5ln";
   };
 
-  patches = [ /* ./lxc_ro_promote_secondaries.patch */ ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [
+    udev
+    runtimeShellPackage # So patchShebangs finds a bash suitable for the installed scripts
+  ];
 
-  buildInputs = [ pkgconfig udev ];
+  prePatch = ''
+    substituteInPlace hooks/dhcpcd-run-hooks.in --replace /bin/sh ${runtimeShell}
+  '';
 
-  configureFlags = "--sysconfdir=/etc";
+  preConfigure = "patchShebangs ./configure";
+
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--localstatedir=/var"
+  ];
 
   makeFlags = "PREFIX=\${out}";
 
@@ -23,10 +36,11 @@ stdenv.mkDerivation rec {
   # Check that the udev plugin got built.
   postInstall = stdenv.lib.optional (udev != null) "[ -e $out/lib/dhcpcd/dev/udev.so ]";
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "A client for the Dynamic Host Configuration Protocol (DHCP)";
-    homepage = http://roy.marples.name/projects/dhcpcd;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
+    homepage = https://roy.marples.name/projects/dhcpcd;
+    platforms = platforms.linux;
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ eelco fpletz ];
   };
 }

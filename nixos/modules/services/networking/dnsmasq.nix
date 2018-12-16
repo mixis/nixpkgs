@@ -5,8 +5,10 @@ with lib;
 let
   cfg = config.services.dnsmasq;
   dnsmasq = pkgs.dnsmasq;
+  stateDir = "/var/lib/dnsmasq";
 
   dnsmasqConf = pkgs.writeText "dnsmasq.conf" ''
+    dhcp-leasefile=${stateDir}/dnsmasq.leases
     ${optionalString cfg.resolveLocalQueries ''
       conf-file=/etc/dnsmasq-conf.conf
       resolv-file=/etc/dnsmasq-resolv.conf
@@ -28,6 +30,7 @@ in
     services.dnsmasq = {
 
       enable = mkOption {
+        type = types.bool;
         default = false;
         description = ''
           Whether to run dnsmasq.
@@ -35,14 +38,16 @@ in
       };
 
       resolveLocalQueries = mkOption {
+        type = types.bool;
         default = true;
         description = ''
           Whether dnsmasq should resolve local queries (i.e. add 127.0.0.1 to
-          /etc/resolv.conf)
+          /etc/resolv.conf).
         '';
       };
 
       servers = mkOption {
+        type = types.listOf types.str;
         default = [];
         example = [ "8.8.8.8" "8.8.4.4" ];
         description = ''
@@ -50,12 +55,20 @@ in
         '';
       };
 
+      alwaysKeepRunning = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          If enabled, systemd will always respawn dnsmasq even if shut down manually. The default, disabled, will only restart it on error.
+        '';
+      };
+
       extraConfig = mkOption {
-        type = types.string;
+        type = types.lines;
         default = "";
         description = ''
           Extra configuration directives that should be added to
-          <literal>dnsmasq.conf</literal>
+          <literal>dnsmasq.conf</literal>.
         '';
       };
 
@@ -73,19 +86,21 @@ in
 
     services.dbus.packages = [ dnsmasq ];
 
-    users.extraUsers = singleton
-      { name = "dnsmasq";
-        uid = config.ids.uids.dnsmasq;
-        description = "Dnsmasq daemon user";
-        home = "/var/empty";
-      };
+    users.users = singleton {
+      name = "dnsmasq";
+      uid = config.ids.uids.dnsmasq;
+      description = "Dnsmasq daemon user";
+    };
 
     systemd.services.dnsmasq = {
-        description = "dnsmasq daemon";
-        after = [ "network.target" ];
+        description = "Dnsmasq Daemon";
+        after = [ "network.target" "systemd-resolved.service" ];
         wantedBy = [ "multi-user.target" ];
         path = [ dnsmasq ];
         preStart = ''
+          mkdir -m 755 -p ${stateDir}
+          touch ${stateDir}/dnsmasq.leases
+          chown -R dnsmasq ${stateDir}
           touch /etc/dnsmasq-{conf,resolv}.conf
           dnsmasq --test
         '';
@@ -93,10 +108,13 @@ in
           Type = "dbus";
           BusName = "uk.org.thekelleys.dnsmasq";
           ExecStart = "${dnsmasq}/bin/dnsmasq -k --enable-dbus --user=dnsmasq -C ${dnsmasqConf}";
-          ExecReload = "${dnsmasq}/bin/kill -HUP $MAINPID";
+          ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
+          PrivateTmp = true;
+          ProtectSystem = true;
+          ProtectHome = true;
+          Restart = if cfg.alwaysKeepRunning then "always" else "on-failure";
         };
+        restartTriggers = [ config.environment.etc.hosts.source ];
     };
-
   };
-
 }

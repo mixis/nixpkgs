@@ -1,23 +1,31 @@
-{stdenv, fetchurl, bzip2, freetype, graphviz, ghostscript
-, libjpeg, libpng, libtiff, libxml2, zlib, libtool, xz
-, libX11, quantumdepth ? 8}:
+{ stdenv, fetchurl, bzip2, freetype, graphviz, ghostscript
+, libjpeg, libpng, libtiff, libxml2, zlib, libtool, xz, libX11
+, libwebp, quantumdepth ? 8, fixDarwinDylibNames }:
 
-let version = "1.3.18"; in
-
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   name = "graphicsmagick-${version}";
+  version = "1.3.30";
 
   src = fetchurl {
     url = "mirror://sourceforge/graphicsmagick/GraphicsMagick-${version}.tar.xz";
-    sha256 = "1axh4j2jr3l92dan15b2nmx9da4l7i0rcz9b5bvfd4q742zfwj7x";
+    sha256 = "1warar0731xf94r4bn5x1km85rjabl4iq8r0dk3ywmczap3farfr";
   };
 
-  configureFlags = "--enable-shared --with-quantum-depth=" + toString quantumdepth;
+  patches = [
+    ./disable-popen.patch
+  ];
+
+  configureFlags = [
+    "--enable-shared"
+    "--with-quantum-depth=${toString quantumdepth}"
+    "--with-gslib=yes"
+  ];
 
   buildInputs =
     [ bzip2 freetype ghostscript graphviz libjpeg libpng libtiff libX11 libxml2
-      zlib libtool
-    ];
+      zlib libtool libwebp
+    ]
+    ++ stdenv.lib.optional stdenv.isDarwin fixDarwinDylibNames;
 
   nativeBuildInputs = [ xz ];
 

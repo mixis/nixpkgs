@@ -1,14 +1,13 @@
-{ pkgs,  stdenv, fetchurl, unzip, elasticsearch }:
-
-with pkgs.lib;
+{ pkgs,  stdenv, fetchurl, unzip, elasticsearch-oss, javaPackages, elk6Version }:
 
 let
   esPlugin = a@{
-    pluginName, 
+    pluginName,
     installPhase ? ''
-      mkdir -p $out/bin
-      ES_HOME=$out ${elasticsearch}/bin/elasticsearch-plugin --install ${pluginName} --url file://$src
-    '', 
+      mkdir -p $out/config
+      mkdir -p $out/plugins
+      ES_HOME=$out ${elasticsearch-oss}/bin/elasticsearch-plugin install --batch -v file://$src
+    '',
     ...
   }:
     stdenv.mkDerivation (a // {
@@ -16,58 +15,54 @@ let
       unpackPhase = "true";
       buildInputs = [ unzip ];
       meta = a.meta // {
-        platforms = elasticsearch.meta.platforms;
-        maintainers = (a.meta.maintainers or []) ++ [ maintainers.offline ];
+        platforms = elasticsearch-oss.meta.platforms;
+        maintainers = (a.meta.maintainers or []) ++ (with stdenv.lib.maintainers; [ offline ]);
       };
     });
 in {
-  elasticsearch_river_jdbc = esPlugin rec {
-    name = "elasticsearch-river-jdbc-${version}";
-    pluginName = "elasticsearch-river-jdbc";
-    version = "1.3.0.4";
-    src = fetchurl {
-      url = "http://xbib.org/repository/org/xbib/elasticsearch/plugin/elasticsearch-river-jdbc/${version}/${name}-plugin.zip";
-      sha256 = "0272l6cr032iccwwa803shzfjg3505jc48d9qdazrwxjmnlkkzqk";
-    };
-    meta = {
-      homepage = "https://github.com/jprante/elasticsearch-river-jdbc";
-      description = "Plugin to fetch data from JDBC sources for indexing into Elasticsearch";
-      license = licenses.asl20;
-    };
-  };
 
-  elasticsearch_analisys_lemmagen = esPlugin rec {
+  elasticsearch_analysis_lemmagen = esPlugin rec {
     name = "elasticsearch-analysis-lemmagen-${version}";
     pluginName = "elasticsearch-analysis-lemmagen";
-    version = "0.1";
+    version = "${elk6Version}";
     src = fetchurl {
       url = "https://github.com/vhyza/elasticsearch-analysis-lemmagen/releases/download/v${version}/${name}-plugin.zip";
-      sha256 = "bf7bf5ce3ccdd3afecd0e18cd6fce1ef56f824e41f4ef50553ae598caa5c366d";
+      sha256 = "0299ldqwjn1gn44yyjiqjrxvs6mlclhzl1dbn6xlgg1a2lkaal4v";
     };
-    meta = {
-      homepage = "https://github.com/vhyza/elasticsearch-analysis-lemmagen";
+    meta = with stdenv.lib; {
+      homepage = https://github.com/vhyza/elasticsearch-analysis-lemmagen;
       description = "LemmaGen Analysis plugin provides jLemmaGen lemmatizer as Elasticsearch token filter";
       license = licenses.asl20;
     };
   };
 
-  elasticsearch_http_basic = stdenv.mkDerivation rec {
-    name = "elasticsearch-http-basic-${version}";
-    version = "1.3.2";
-
-    src = fetchurl {
-      url = "https://github.com/Asquera/elasticsearch-http-basic/releases/download/${version}/${name}.jar";
-      sha256 = "1qq8z0233mzz699zbzjwmx7ghn8k0djgyc5ixr8i5xchfrsrymn2";
+  discovery-ec2 = esPlugin rec {
+    name = "elasticsearch-discovery-ec2-${version}";
+    pluginName = "discovery-ec2";
+    version = "${elk6Version}";
+    src = pkgs.fetchurl {
+      url = "https://artifacts.elastic.co/downloads/elasticsearch-plugins/discovery-ec2/discovery-ec2-${elk6Version}.zip";
+      sha256 = "1mg9knbc4r21kaiqnmkd8nzf2i23w5zxqnxyz484q0l2jf4hlkq1";
     };
+    meta = with stdenv.lib; {
+      homepage = https://github.com/elastic/elasticsearch/tree/master/plugins/discovery-ec2;
+      description = "The EC2 discovery plugin uses the AWS API for unicast discovery.";
+      license = licenses.asl20;
+    };
+  };
 
-    phases = ["installPhase"];
-    installPhase = "install -D $src $out/plugins/http-basic/${name}.jar";
-
-    meta = {
-      homepage = https://github.com/Asquera/elasticsearch-http-basic;
-      description = "HTTP Basic Authentication for Elasticsearch";
-      license = licenses.mit;
-      platforms = elasticsearch.meta.platforms;
+  search_guard = esPlugin rec {
+    name = "elastic-search-guard-${version}";
+    pluginName = "search-guard";
+    version = "${elk6Version}-23.2";
+    src = fetchurl rec {
+      url = "mirror://maven/com/floragunn/search-guard-6/${version}/search-guard-6-${version}.zip";
+      sha256 = "05310wyxzhylxr0dfgzr10pb0pak30ry8r97g49n6iqj8dw3csnb";
+    };
+    meta = with stdenv.lib; {
+      homepage = https://github.com/floragunncom/search-guard;
+      description = "Plugin to fetch data from JDBC sources for indexing into Elasticsearch";
+      license = licenses.asl20;
     };
   };
 }

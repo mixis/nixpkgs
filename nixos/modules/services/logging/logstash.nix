@@ -7,7 +7,30 @@ let
   pluginPath = lib.concatStringsSep ":" cfg.plugins;
   havePluginPath = lib.length cfg.plugins > 0;
   ops = lib.optionalString;
+  verbosityFlag = "--log.level " + cfg.logLevel;
 
+  pluginsPath = "--path.plugins ${pluginPath}";
+
+  logstashConf = pkgs.writeText "logstash.conf" ''
+    input {
+      ${cfg.inputConfig}
+    }
+
+    filter {
+      ${cfg.filterConfig}
+    }
+
+    output {
+      ${cfg.outputConfig}
+    }
+  '';
+
+  logstashSettingsYml = pkgs.writeText "logstash.yml" cfg.extraSettings;
+
+  logstashSettingsDir = pkgs.runCommand "logstash-settings" {inherit logstashSettingsYml;} ''
+    mkdir -p $out
+    ln -s $logstashSettingsYml $out/logstash.yml
+  '';
 in
 
 {
@@ -26,7 +49,8 @@ in
       package = mkOption {
         type = types.package;
         default = pkgs.logstash;
-        example = literalExample "pkgs.logstash";
+        defaultText = "pkgs.logstash";
+        example = literalExample "pkgs.logstash5";
         description = "Logstash package to use.";
       };
 
@@ -37,10 +61,19 @@ in
         description = "The paths to find other logstash plugins in.";
       };
 
-      watchdogTimeout = mkOption {
-        type = types.int;
-        default = 10;
-        description = "Set watchdog timeout value in seconds.";
+      dataDir = mkOption {
+        type = types.str;
+        default = "/var/lib/logstash";
+        description = ''
+          A path to directory writable by logstash that it uses to store data.
+          Plugins will also have access to this path.
+        '';
+      };
+
+      logLevel = mkOption {
+        type = types.enum [ "debug" "info" "warn" "error" "fatal" ];
+        default = "warn";
+        description = "Logging verbosity level.";
       };
 
       filterWorkers = mkOption {
@@ -49,15 +82,9 @@ in
         description = "The quantity of filter workers to run.";
       };
 
-      enableWeb = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Enable the logstash web interface.";
-      };
-
-      address = mkOption {
+      listenAddress = mkOption {
         type = types.str;
-        default = "0.0.0.0";
+        default = "127.0.0.1";
         description = "Address on which to start webserver.";
       };
 
@@ -69,12 +96,12 @@ in
 
       inputConfig = mkOption {
         type = types.lines;
-        default = ''stdin { type => "example" }'';
+        default = ''generator { }'';
         description = "Logstash input configuration.";
         example = ''
           # Read from journal
           pipe {
-            command => "${pkgs.systemd}/bin/journalctl -f -o json"
+            command => "''${pkgs.systemd}/bin/journalctl -f -o json"
             type => "syslog" codec => json {}
           }
         '';
@@ -82,7 +109,7 @@ in
 
       filterConfig = mkOption {
         type = types.lines;
-        default = ''noop {}'';
+        default = "";
         description = "logstash filter configuration.";
         example = ''
           if [type] == "syslog" {
@@ -91,7 +118,7 @@ in
             prune {
               whitelist_names => [
                 "type", "@timestamp", "@version",
-                "MESSAGE", "PRIORITY", "SYSLOG_FACILITY",
+                "MESSAGE", "PRIORITY", "SYSLOG_FACILITY"
               ]
             }
           }
@@ -100,13 +127,26 @@ in
 
       outputConfig = mkOption {
         type = types.lines;
-        default = ''stdout { debug => true debug_format => "json"}'';
+        default = ''stdout { codec => rubydebug }'';
         description = "Logstash output configuration.";
         example = ''
-          redis { host => "localhost" data_type => "list" key => "logstash" codec => json }
-          elasticsearch { embedded => true }
+          redis { host => ["localhost"] data_type => "list" key => "logstash" codec => json }
+          elasticsearch { }
         '';
       };
+
+      extraSettings = mkOption {
+        type = types.lines;
+        default = "";
+        description = "Extra Logstash settings in YAML format.";
+        example = ''
+          pipeline:
+            batch:
+              size: 125
+              delay: 5
+        '';
+      };
+
 
     };
   };
@@ -119,26 +159,18 @@ in
       description = "Logstash Daemon";
       wantedBy = [ "multi-user.target" ];
       environment = { JAVA_HOME = jre; };
+      path = [ pkgs.bash ];
       serviceConfig = {
-        ExecStart =
-          "${cfg.package}/bin/logstash agent " +
-          "-w ${toString cfg.filterWorkers} " +
-          ops havePluginPath "--pluginpath ${pluginPath} " +
-          "--watchdog-timeout ${toString cfg.watchdogTimeout} " +
-          "-f ${writeText "logstash.conf" ''
-            input {
-              ${cfg.inputConfig}
-            }
-
-            filter {
-              ${cfg.filterConfig}
-            }
-
-            output {
-              ${cfg.outputConfig}
-            }
-          ''} " +
-          ops cfg.enableWeb "-- web -a ${cfg.address} -p ${cfg.port}";
+        ExecStartPre = ''${pkgs.coreutils}/bin/mkdir -p "${cfg.dataDir}" ; ${pkgs.coreutils}/bin/chmod 700 "${cfg.dataDir}"'';
+        ExecStart = concatStringsSep " " (filter (s: stringLength s != 0) [
+          "${cfg.package}/bin/logstash"
+          "-w ${toString cfg.filterWorkers}"
+          (ops havePluginPath pluginsPath)
+          "${verbosityFlag}"
+          "-f ${logstashConf}"
+          "--path.settings ${logstashSettingsDir}"
+          "--path.data ${cfg.dataDir}"
+        ]);
       };
     };
   };

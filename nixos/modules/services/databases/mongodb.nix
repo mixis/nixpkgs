@@ -4,21 +4,17 @@ with lib;
 
 let
 
-  b2s = x: if x then "true" else "false";
-
   cfg = config.services.mongodb;
 
   mongodb = cfg.package;
 
   mongoCnf = pkgs.writeText "mongodb.conf"
   ''
-    bind_ip = ${cfg.bind_ip}
-    ${optionalString cfg.quiet "quiet = true"}
-    dbpath = ${cfg.dbpath}
-    syslog = true
-    fork = true
-    pidfilepath = ${cfg.pidFile}
-    ${optionalString (cfg.replSetName != "") "replSet = ${cfg.replSetName}"}
+    net.bindIp: ${cfg.bind_ip}
+    ${optionalString cfg.quiet "systemLog.quiet: true"}
+    systemLog.destination: syslog
+    storage.dbPath: ${cfg.dbpath}
+    ${optionalString (cfg.replSetName != "") "replication.replSetName: ${cfg.replSetName}"}
     ${cfg.extraConfig}
   '';
 
@@ -41,6 +37,7 @@ in
 
       package = mkOption {
         default = pkgs.mongodb;
+        defaultText = "pkgs.mongodb";
         type = types.package;
         description = "
           Which MongoDB derivation to use.
@@ -83,9 +80,9 @@ in
       extraConfig = mkOption {
         default = "";
         example = ''
-          nojournal = true
+          storage.journal.enabled: false
         '';
-        description = "MongoDB extra configuration";
+        description = "MongoDB extra configuration in YAML format";
       };
     };
 
@@ -96,7 +93,7 @@ in
 
   config = mkIf config.services.mongodb.enable {
 
-    users.extraUsers.mongodb = mkIf (cfg.user == "mongodb")
+    users.users.mongodb = mkIf (cfg.user == "mongodb")
       { name = "mongodb";
         uid = config.ids.uids.mongodb;
         description = "MongoDB server user";
@@ -111,7 +108,7 @@ in
         after = [ "network.target" ];
 
         serviceConfig = {
-          ExecStart = "${mongodb}/bin/mongod --quiet --config ${mongoCnf}";
+          ExecStart = "${mongodb}/bin/mongod --config ${mongoCnf} --fork --pidfilepath ${cfg.pidFile}";
           User = cfg.user;
           PIDFile = cfg.pidFile;
           Type = "forking";
@@ -120,6 +117,7 @@ in
         };
 
         preStart = ''
+          rm ${cfg.dbpath}/mongod.lock || true
           if ! test -e ${cfg.dbpath}; then
               install -d -m0700 -o ${cfg.user} ${cfg.dbpath}
           fi

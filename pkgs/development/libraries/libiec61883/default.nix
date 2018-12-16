@@ -10,12 +10,14 @@ stdenv.mkDerivation rec {
     sha256 = "7c7879c6b9add3148baea697dfbfdcefffbc8ac74e8e6bcf46125ec1d21b373a";
   };
 
-  buildInputs = [ pkgconfig ];
-  
+  nativeBuildInputs = [ pkgconfig ];
+
   propagatedBuildInputs = [ libraw1394 ];
 
-  meta = { 
+  meta = with stdenv.lib; {
     homepage = http://www.linux1394.org;
-    license = "LGPL";
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ wkennington ];
   };
 }

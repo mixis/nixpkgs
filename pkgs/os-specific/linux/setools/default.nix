@@ -1,33 +1,42 @@
-{ stdenv, fetchurl, fetchpatch, autoreconfHook, pkgconfig, bison, flex
-, python, swig2, tcl, libsepol, libselinux, libxml2, sqlite, bzip2 }:
+{ stdenv, fetchFromGitHub, bison, flex, python3 , swig
+, libsepol, libselinux, checkpolicy
+, withGraphics ? false
+}:
 
-stdenv.mkDerivation rec {
-  name = "setools-3.3.8";
+with stdenv.lib;
+with python3.pkgs;
 
-  src = fetchurl {
-    url = "http://oss.tresys.com/projects/setools/chrome/site/dists/${name}/${name}.tar.bz2";
-    sha256 = "16g987ijaxabc30zyjzia4nafq49rm038y1pm4vca7i3kb67wf24";
+buildPythonApplication rec {
+  pname = "setools";
+  version = "2017-11-10";
+
+  src = fetchFromGitHub {
+    owner = "TresysTechnology";
+    repo = pname;
+    rev = "a1aa0f33f5c428d3f9fe82960ed5de36f38047f7";
+    sha256 = "0iyj35fff93cprjkzbkg9dn5xz8dg5h2kjx3476fl625nxxskndn";
   };
 
-  patches = [ ./ftbfs-invalid-operands-of-types.patch ];
+  nativeBuildInputs = [ bison flex ];
+  buildInputs = [ libsepol swig ];
+  propagatedBuildInputs = [ enum34 libselinux networkx ]
+    ++ optionals withGraphics [ pyqt5 ];
 
-  # SWIG-TCL is broken in 3.3.8
-  configureFlags = ''
-    --with-tcl=${tcl}/lib
-    --with-sepol-devel=${libsepol}
-    --with-selinux-devel=${libselinux}
-    --disable-gui
-    --disable-swig-tcl
+  checkInputs = [ tox checkpolicy ];
+  preCheck = ''
+    export CHECKPOLICY=${checkpolicy}/bin/checkpolicy
   '';
 
-  buildInputs = [ autoreconfHook pkgconfig bison flex python swig2 ];
+  setupPyBuildFlags = [ "-i" ];
 
-  nativeBuildInputs = [ tcl libsepol libselinux libxml2 sqlite bzip2 ];
+  preBuild = ''
+    export SEPOL="${stdenv.lib.getLib libsepol}/lib/libsepol.a"
+  '';
 
   meta = {
     description = "SELinux Tools";
-    homepage = "http://oss.tresys.com/projects/setools/";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = https://github.com/TresysTechnology/setools/wiki;
+    license = licenses.gpl2;
+    platforms = platforms.linux;
   };
 }

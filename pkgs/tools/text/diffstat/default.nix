@@ -1,11 +1,14 @@
 { fetchurl, stdenv }:
 
 stdenv.mkDerivation rec {
-  name = "diffstat-1.59";
+  name = "diffstat-1.62";
 
   src = fetchurl {
-    url = "ftp://invisible-island.net/diffstat/${name}.tgz";
-    sha256 = "0w7jvfilbnfa9v3h8j8ipirvrj7n2x5gszfanzxvx748p10i8z96";
+    urls = [
+      "ftp://ftp.invisible-island.net/diffstat/${name}.tgz"
+      "https://invisible-mirror.net/archives/diffstat/${name}.tgz"
+    ];
+    sha256 = "07sr482y6iw7n7ddkba0w51kbjc99snvnijkn5ba2xzd8hv1h2bz";
   };
 
   meta = with stdenv.lib; {

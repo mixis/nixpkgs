@@ -1,43 +1,55 @@
-{ fetchgit, stdenv, flex, bison, db, iptables, pkgconfig }:
+{ fetchurl, stdenv, flex, bash, bison, db, iptables, pkgconfig, libelf }:
 
 stdenv.mkDerivation rec {
-  name = "iproute2-3.17.0";
+  name = "iproute2-${version}";
+  version = "4.19.0";
 
-  src = fetchgit {
-    url = "git://git.kernel.org/pub/scm/linux/kernel/git/shemminger/iproute2.git";
-    rev = "refs/tags/v3.17.0";
-    sha256 = "113ayyy7cjxn0bf67fh4is4z0jysgif016kv7ig0jp6r68xp2spa";
+  src = fetchurl {
+    url = "mirror://kernel/linux/utils/net/iproute2/${name}.tar.xz";
+    sha256 = "114rlb3bvrf7q6yr03mn1rj6gl7mrg0psvm2dx0qb2kxyjhmrv6r";
   };
-
-  patch = [ ./vpnc.patch ];
 
   preConfigure = ''
     patchShebangs ./configure
     sed -e '/ARPDDIR/d' -i Makefile
+    # Don't build netem tools--they're not installed and require HOSTCC
+    substituteInPlace Makefile --replace " netem " " "
   '';
+
+  outputs = [ "out" "dev"];
 
   makeFlags = [
     "DESTDIR="
     "LIBDIR=$(out)/lib"
     "SBINDIR=$(out)/sbin"
-    "CONFDIR=$(out)/etc"
-    "DOCDIR=$(out)/share/doc/${name}"
     "MANDIR=$(out)/share/man"
+    "BASH_COMPDIR=$(out)/share/bash-completion/completions"
+    "DOCDIR=$(TMPDIR)/share/doc/${name}" # Don't install docs
+    "HDRDIR=$(dev)/include/iproute2"
   ];
 
-  buildInputs = [ db iptables ];
+  buildFlags = [
+    "CONFDIR=/etc/iproute2"
+  ];
+
+  installFlags = [
+    "CONFDIR=$(out)/etc/iproute2"
+  ];
+
+  buildInputs = [ db iptables libelf ];
   nativeBuildInputs = [ bison flex pkgconfig ];
 
   enableParallelBuilding = true;
 
-  # Get rid of useless TeX/SGML docs.
-  postInstall = "rm -rf $out/share/doc";
+  postInstall = ''
+    PATH=${bash}/bin:$PATH patchShebangs $out/sbin
+  '';
 
   meta = with stdenv.lib; {
-    homepage = http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2;
+    homepage = https://wiki.linuxfoundation.org/networking/iproute2;
     description = "A collection of utilities for controlling TCP/IP networking and traffic control in Linux";
     platforms = platforms.linux;
     license = licenses.gpl2;
-    maintainers = with maintainers; [ eelco wkennington ];
+    maintainers = with maintainers; [ eelco wkennington fpletz ];
   };
 }

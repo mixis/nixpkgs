@@ -11,7 +11,8 @@ let
   cfg = config.programs.zsh;
 
   zshAliases = concatStringsSep "\n" (
-    mapAttrsFlatten (k: v: "alias ${k}='${v}'") cfg.shellAliases
+    mapAttrsFlatten (k: v: "alias ${k}=${escapeShellArg v}")
+      (filterAttrs (k: v: !isNull v) cfg.shellAliases)
   );
 
 in
@@ -25,18 +26,21 @@ in
       enable = mkOption {
         default = false;
         description = ''
-          Whenever to configure Zsh as an interactive shell.
+          Whether to configure zsh as an interactive shell. To enable zsh for
+          a particular user, use the <option>users.users.&lt;name?&gt;.shell</option>
+          option for that user. To enable zsh system-wide use the
+          <option>users.defaultUserShell</option> option.
         '';
         type = types.bool;
       };
 
       shellAliases = mkOption {
-        default = config.environment.shellAliases;
+        default = {};
         description = ''
-          Set of aliases for zsh shell. See <option>environment.shellAliases</option>
-          for an option format description.
+          Set of aliases for zsh shell, which overrides <option>environment.shellAliases</option>.
+          See <option>environment.shellAliases</option> for an option format description.
         '';
-        type = types.attrs; # types.attrsOf types.stringOrPath;
+        type = with types; attrsOf (nullOr (either str path));
       };
 
       shellInit = mkOption {
@@ -65,12 +69,35 @@ in
 
       promptInit = mkOption {
         default = ''
-          autoload -U promptinit && promptinit && prompt walters
+          if [ "$TERM" != dumb ]; then
+              autoload -U promptinit && promptinit && prompt walters
+          fi
         '';
         description = ''
           Shell script code used to initialise the zsh prompt.
         '';
         type = types.lines;
+      };
+
+      enableCompletion = mkOption {
+        default = true;
+        description = ''
+          Enable zsh completion for all interactive zsh shells.
+        '';
+        type = types.bool;
+      };
+
+
+      enableGlobalCompInit = mkOption {
+        default = cfg.enableCompletion;
+        description = ''
+          Enable execution of compinit call for all interactive zsh shells.
+
+          This option can be disabled if the user wants to extend its
+          <literal>fpath</literal> and a custom <literal>compinit</literal>
+          call in the local config is required.
+        '';
+        type = types.bool;
       };
 
     };
@@ -79,31 +106,7 @@ in
 
   config = mkIf cfg.enable {
 
-    programs.zsh = {
-
-      shellInit = ''
-        . ${config.system.build.setEnvironment}
-
-        ${cfge.shellInit}
-      '';
-
-      loginShellInit = cfge.loginShellInit;
-
-      interactiveShellInit = ''
-        ${cfge.interactiveShellInit}
-
-        ${cfg.promptInit}
-        ${zshAliases}
-
-        # Some sane history defaults
-        export SAVEHIST=2000
-        export HISTSIZE=2000
-        export HISTFILE=$HOME/.zsh_history
-
-        setopt HIST_IGNORE_DUPS SHARE_HISTORY
-      '';
-
-    };
+    programs.zsh.shellAliases = mapAttrs (name: mkDefault) cfge.shellAliases;
 
     environment.etc."zshenv".text =
       ''
@@ -115,11 +118,17 @@ in
         if [ -n "$__ETC_ZSHENV_SOURCED" ]; then return; fi
         export __ETC_ZSHENV_SOURCED=1
 
+        if [ -z "$__NIXOS_SET_ENVIRONMENT_DONE" ]; then
+            . ${config.system.build.setEnvironment}
+        fi
+
+        ${cfge.shellInit}
+
         ${cfg.shellInit}
 
         # Read system-wide modifications.
         if test -f /etc/zshenv.local; then
-          . /etc/zshenv.local
+            . /etc/zshenv.local
         fi
       '';
 
@@ -132,11 +141,13 @@ in
         if [ -n "$__ETC_ZPROFILE_SOURCED" ]; then return; fi
         __ETC_ZPROFILE_SOURCED=1
 
+        ${cfge.loginShellInit}
+
         ${cfg.loginShellInit}
 
         # Read system-wide modifications.
         if test -f /etc/zprofile.local; then
-          . /etc/zprofile.local
+            . /etc/zprofile.local
         fi
       '';
 
@@ -151,17 +162,42 @@ in
 
         . /etc/zinputrc
 
+        # history defaults
+        SAVEHIST=2000
+        HISTSIZE=2000
+        HISTFILE=$HOME/.zsh_history
+
+        setopt HIST_IGNORE_DUPS SHARE_HISTORY HIST_FCNTL_LOCK
+
+        HELPDIR="${pkgs.zsh}/share/zsh/$ZSH_VERSION/help"
+
+        # Tell zsh how to find installed completions
+        for p in ''${(z)NIX_PROFILES}; do
+            fpath+=($p/share/zsh/site-functions $p/share/zsh/$ZSH_VERSION/functions $p/share/zsh/vendor-completions)
+        done
+
+        ${optionalString cfg.enableGlobalCompInit "autoload -U compinit && compinit"}
+
+        ${cfge.interactiveShellInit}
+
         ${cfg.interactiveShellInit}
+
+        ${zshAliases}
+
+        ${cfg.promptInit}
 
         # Read system-wide modifications.
         if test -f /etc/zshrc.local; then
-          . /etc/zshrc.local
+            . /etc/zshrc.local
         fi
       '';
 
     environment.etc."zinputrc".source = ./zinputrc;
 
-    environment.systemPackages = [ pkgs.zsh ];
+    environment.systemPackages = [ pkgs.zsh ]
+      ++ optional cfg.enableCompletion pkgs.nix-zsh-completions;
+
+    environment.pathsToLink = optional cfg.enableCompletion "/share/zsh";
 
     #users.defaultUserShell = mkDefault "/run/current-system/sw/bin/zsh";
 

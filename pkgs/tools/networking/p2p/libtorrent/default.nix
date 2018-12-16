@@ -1,23 +1,30 @@
-{ stdenv, fetchurl, pkgconfig, openssl, libsigcxx, zlib }:
+# NOTE: this is rakshava's version of libtorrent, used mainly by rtorrent
+# This is NOT libtorrent-rasterbar, used by Deluge, qbitttorent, and others
+{ stdenv, fetchFromGitHub, pkgconfig
+, libtool, autoconf, automake, cppunit
+, openssl, libsigcxx, zlib }:
 
-let
-  version = "0.13.4";
-in
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   name = "libtorrent-${version}";
+  version = "0.13.7";
 
-  src = fetchurl {
-    url = "http://libtorrent.rakshasa.no/downloads/libtorrent-${version}.tar.gz";
-    sha256 = "0ma910br5vxrfpm4f4w4942lpmhwvqjnnf9h8vpf52fw35qhjkkh";
+  src = fetchFromGitHub {
+    owner = "rakshasa";
+    repo = "libtorrent";
+    rev = "v${version}";
+    sha256 = "027qanwcisxhx0bq8dn8cpg8563q0k2pm8ls278f04n7jqvvwkp0";
   };
 
-  buildInputs = [ pkgconfig openssl libsigcxx zlib ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ libtool autoconf automake cppunit openssl libsigcxx zlib ];
 
-  meta = {
-    homepage = "http://libtorrent.rakshasa.no/";
-    description = "A BitTorrent library written in C++ for *nix, with a focus on high performance and good code";
+  preConfigure = "./autogen.sh";
 
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.simons ];
+  meta = with stdenv.lib; {
+    inherit (src.meta) homepage;
+    description = "A BitTorrent library written in C++ for *nix, with focus on high performance and good code";
+
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ ebzzry codyopel ];
   };
 }

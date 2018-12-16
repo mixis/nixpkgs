@@ -1,9 +1,12 @@
-import ./make-test.nix {
+import ./make-test.nix ({ pkgs, ...} : {
   name = "tomcat";
+  meta = with pkgs.stdenv.lib.maintainers; {
+    maintainers = [ eelco chaoflow ];
+  };
 
   nodes = {
     server =
-      { pkgs, config, ... }:
+      { ... }:
 
       { services.tomcat.enable = true;
         services.httpd.enable = true;
@@ -20,10 +23,8 @@ import ./make-test.nix {
     startAll;
 
     $server->waitForUnit("tomcat");
-    $server->sleep(30); # Dirty, but it takes a while before Tomcat handles to requests properly
     $client->waitForUnit("network.target");
-    $client->succeed("curl --fail http://server/examples/servlets/servlet/HelloWorldExample");
-    $client->succeed("curl --fail http://server/examples/jsp/jsp2/simpletag/hello.jsp");
+    $client->waitUntilSucceeds("curl --fail http://server/examples/servlets/servlet/HelloWorldExample");
+    $client->waitUntilSucceeds("curl --fail http://server/examples/jsp/jsp2/simpletag/hello.jsp");
   '';
-
-}
+})

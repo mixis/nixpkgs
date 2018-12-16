@@ -1,23 +1,22 @@
 {stdenv, fetchurl, libnl, pkgconfig}:
 
 stdenv.mkDerivation rec {
-  name = "iw-3.15";
+  name = "iw-4.14";
 
   src = fetchurl {
     url = "https://www.kernel.org/pub/software/network/iw/${name}.tar.xz";
-    sha256 = "12jby9nv5nypadgdksbqw0y2kfm3j47zw7a3rwmy56d7rs90lp5x";
+    sha256 = "12ddd6vh6vs97135bnlyr0szv7hvpbnmfh48584frzab0z0725ph";
   };
 
-  buildInputs = [ libnl pkgconfig ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ libnl ];
 
-  preBuild = "
-    makeFlagsArray=(PREFIX=$out)
-  ";
+  makeFlags = [ "PREFIX=\${out}" ];
 
   meta = {
     description = "Tool to use nl80211";
     homepage = http://wireless.kernel.org/en/users/Documentation/iw;
-    license = "BSD";
+    license = stdenv.lib.licenses.isc;
     maintainers = with stdenv.lib.maintainers; [viric];
     platforms = with stdenv.lib.platforms; linux;
   };

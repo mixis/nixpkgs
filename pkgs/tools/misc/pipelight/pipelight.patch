@@ -43,7 +43,7 @@ diff -urN pipelight.old/bin/pipelight-plugin.in pipelight.new/bin/pipelight-plug
 -fi
 +download_file()
 +{
-+	curl --cacert /etc/ssl/certs/ca-bundle.crt -o "$1" "$2"
++	curl --cacert /etc/ssl/certs/ca-certificates.crt -o "$1" "$2"
 +}
 
  # Use shasum instead of sha256sum on MacOS / *BSD
@@ -62,37 +62,10 @@ diff -urN pipelight.old/configure pipelight.new/configure
 -	gpg_exec="/usr/bin/gpg"
 -fi
 +bash_interp=bash
-+gpg_exec=gpg2
++gpg_exec=gpg
  moz_plugin_path=""
  gcc_runtime_dlls=""
  so_mode="0644"
-diff -urN pipelight.old/Makefile pipelight.new/Makefile
---- pipelight.old/Makefile	2014-07-19 22:53:02.000000000 +0200
-+++ pipelight.new/Makefile	2014-07-26 23:25:22.020707765 +0200
-@@ -29,7 +29,7 @@
-			-e 's|@@BINDIR@@|$(bindir)|g' \
-			-e 's|@@DATADIR@@|$(datadir)|g' \
-			-e 's|@@GCC_RUNTIME_DLLS@@|$(gcc_runtime_dlls)|g' \
--			-e 's|@@GPG@@|$(gpgexec)|g' \
-+			-e 's|@@GPG@@|$(gpg_exec)|g' \
-			-e 's|@@LIBDIR@@|$(libdir)|g' \
-			-e 's|@@MANDIR@@|$(mandir)|g' \
-			-e 's|@@MOZ_PLUGIN_PATH@@|$(moz_plugin_path)|g' \
-@@ -69,12 +69,12 @@
-
- .PHONY: prebuilt32
- prebuilt32: config.make pluginloader-$(git_commit).tar.gz pluginloader-$(git_commit).tar.gz.sig
--	$(gpgexec) --batch --no-default-keyring --keyring "share/sig-pluginloader.gpg" --verify "pluginloader-$(git_commit).tar.gz.sig"
-+	$(gpg_exec) --batch --no-default-keyring --keyring "share/sig-pluginloader.gpg" --verify "pluginloader-$(git_commit).tar.gz.sig"
-	tar -xvf "pluginloader-$(git_commit).tar.gz" src/windows/pluginloader.exe src/winecheck/winecheck.exe
-
- .PHONY: prebuilt64
- prebuilt64: config.make pluginloader-$(git_commit).tar.gz pluginloader-$(git_commit).tar.gz.sig
--	$(gpgexec) --batch --no-default-keyring --keyring "share/sig-pluginloader.gpg" --verify "pluginloader-$(git_commit).tar.gz.sig"
-+	$(gpg_exec) --batch --no-default-keyring --keyring "share/sig-pluginloader.gpg" --verify "pluginloader-$(git_commit).tar.gz.sig"
-	tar -xvf "pluginloader-$(git_commit).tar.gz" src/windows/pluginloader64.exe src/winecheck/winecheck64.exe
-
- .PHONY: pluginloader32
 diff -urN pipelight.old/share/install-dependency pipelight.new/share/install-dependency
 --- pipelight.old/share/install-dependency	2014-07-19 22:53:02.000000000 +0200
 +++ pipelight.new/share/install-dependency	2014-07-26 23:26:18.431938546 +0200
@@ -138,7 +111,7 @@ diff -urN pipelight.old/share/install-dependency pipelight.new/share/install-dep
 -fi
 +download_file()
 +{
-+	curl --cacert /etc/ssl/certs/ca-bundle.crt -o "$1" "$2"
++	curl --cacert /etc/ssl/certs/ca-certificates.crt -o "$1" "$2"
 +}
 +get_download_size()
 +{

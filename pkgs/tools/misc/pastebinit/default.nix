@@ -1,17 +1,15 @@
-{ stdenv, fetchurl, python3Packages }:
+{ stdenv, fetchurl, python3 }:
 
-python3Packages.buildPythonPackage rec {
-  version = "1.4.1";
+stdenv.mkDerivation rec {
+  version = "1.5";
   name = "pastebinit-${version}";
 
   src = fetchurl {
     url = "https://launchpad.net/pastebinit/trunk/${version}/+download/${name}.tar.bz2";
-    sha256 = "1rl854izwn1fpaaib6zj7a1a9bis8n7w4zfxcapgfffj37zj0dy2";
+    sha256 = "0mw48fgm9lyh9d3pw997fccmglzsjccf2y347gxjas74wx6aira2";
   };
 
-  configurePhase = "export DETERMINISTIC_BUILD=1";
-
-  buildPhase = "";
+  buildInputs = [ python3 ];
 
   installPhase = ''
     mkdir -p $out/bin
@@ -20,8 +18,6 @@ python3Packages.buildPythonPackage rec {
     cp -a pastebin.d $out/etc
     substituteInPlace $out/bin/pastebinit --replace "'/etc/pastebin.d" "'$out/etc/pastebin.d"
   '';
-
-  doCheck = false;
 
   meta = with stdenv.lib; {
     homepage = https://launchpad.net/pastebinit;

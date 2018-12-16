@@ -1,16 +1,26 @@
-{ stdenv, fetchurl }:
+{ stdenv, fetchFromGitHub, autoreconfHook, perl }:
 
 stdenv.mkDerivation rec {
-  name = "glog-0.3.3";
-  
-  src = fetchurl {
-    url = "http://google-glog.googlecode.com/files/${name}.tar.gz";
-    sha1 = "ed40c26ecffc5ad47c618684415799ebaaa30d65";
+  name = "glog-${version}";
+  version = "0.3.5";
+
+  src = fetchFromGitHub {
+    owner = "google";
+    repo = "glog";
+    rev = "v${version}";
+    sha256 = "12v7j6xy0ghya6a0f6ciy4fnbdc486vml2g07j9zm8y5xc6vx3pq";
   };
 
-  meta = {
-    homepage = http://code.google.com/p/google-glog/;
-    license = "BSD";
+  nativeBuildInputs = [ autoreconfHook ];
+
+  checkInputs = [ perl ];
+  doCheck = false; # fails with "Mangled symbols (28 out of 380) found in demangle.dm"
+
+  meta = with stdenv.lib; {
+    homepage = https://github.com/google/glog;
+    license = licenses.bsd3;
     description = "Library for application-level logging";
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ wkennington ];
   };
 }

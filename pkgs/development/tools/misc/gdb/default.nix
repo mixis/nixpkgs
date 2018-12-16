@@ -1,67 +1,79 @@
-{ fetchurl, stdenv, ncurses, readline, gmp, mpfr, expat, texinfo
-, dejagnu, python, pkgconfig, guile, target ? null
+{ stdenv
 
-# Additional dependencies for GNU/Hurd.
-, mig ? null, hurd ? null
+# Build time
+, fetchurl, fetchpatch, pkgconfig, perl, texinfo, setupDebugInfoDirs
+
+# Run time
+, ncurses, readline, gmp, mpfr, expat, zlib, dejagnu
+
+, pythonSupport ? stdenv.hostPlatform == stdenv.buildPlatform && !stdenv.hostPlatform.isCygwin, python3 ? null
+, guile ? null
 
 }:
 
 let
-
-  basename = "gdb-7.8";
-
-  # Whether (cross-)building for GNU/Hurd.  This is an approximation since
-  # having `stdenv ? cross' doesn't tell us if we're building `crossDrv' and
-  # `nativeDrv'.
-  isGNU =
-      stdenv.system == "i686-gnu"
-      || (stdenv ? cross && stdenv.cross.config == "i586-pc-gnu");
-
+  basename = "gdb-${version}";
+  version = "8.2";
 in
 
-assert isGNU -> mig != null && hurd != null;
+assert pythonSupport -> python3 != null;
 
 stdenv.mkDerivation rec {
-  name = basename + stdenv.lib.optionalString (target != null)
-      ("-" + target.config);
+  name =
+    stdenv.lib.optionalString (stdenv.targetPlatform != stdenv.hostPlatform)
+                              (stdenv.targetPlatform.config + "-")
+    + basename;
 
   src = fetchurl {
     url = "mirror://gnu/gdb/${basename}.tar.xz";
-    sha256 = "49c4abe174f79f54e1f9e75210ffb590d9b497d5b5200b5398c0e073a4ecb875";
+    sha256 = "0fbw6j4z7kmvywwgavn7w3knp860i5i9qnjffc5p52bwkji43963";
   };
 
-  patches = [ ./edit-signals.patch ];
+  patches = [
+    ./debug-info-from-env.patch
+  ] ++ stdenv.lib.optionals stdenv.isDarwin [
+    ./darwin-target-match.patch
+    (fetchpatch {
+      name = "gdb-aarch64-linux-tdep.patch";
+      url = "https://sourceware.org/git/gitweb.cgi?p=binutils-gdb.git;a=patch;h=0c0a40e0abb9f1a584330a1911ad06b3686e5361";
+      excludes = [ "gdb/ChangeLog" ];
+      sha256 = "16zjw99npyapj68sw52xzmbw671ajm9xv7g5jxfmp94if5y91mnj";
+    })
+  ];
 
-  # I think python is not a native input, but I leave it
-  # here while I will not need it cross building
-  nativeBuildInputs = [ texinfo python ]
-    ++ stdenv.lib.optional isGNU mig;
+  nativeBuildInputs = [ pkgconfig texinfo perl setupDebugInfoDirs ];
 
-  buildInputs = [ ncurses readline gmp mpfr expat pkgconfig guile ]
-    ++ stdenv.lib.optional isGNU hurd
+  buildInputs = [ ncurses readline gmp mpfr expat zlib guile ]
+    ++ stdenv.lib.optional pythonSupport python3
     ++ stdenv.lib.optional doCheck dejagnu;
+
+  propagatedNativeBuildInputs = [ setupDebugInfoDirs ];
 
   enableParallelBuilding = true;
 
-  configureFlags = with stdenv.lib;
-    '' --with-gmp=${gmp} --with-mpfr=${mpfr} --with-system-readline
-       --with-expat --with-libexpat-prefix=${expat}
-    ''
-    + optionalString (target != null) " --target=${target.config}"
-    + optionalString (elem stdenv.system platforms.cygwin) "  --without-python";
+  # darwin build fails with format hardening since v7.12
+  hardeningDisable = stdenv.lib.optionals stdenv.isDarwin [ "format" ];
 
-  crossAttrs = {
-    # Do not add --with-python here to avoid cross building it.
-    configureFlags =
-      '' --with-gmp=${gmp.crossDrv} --with-mpfr=${mpfr.crossDrv} --with-system-readline
-         --with-expat --with-libexpat-prefix=${expat.crossDrv} --without-python
-      '' + stdenv.lib.optionalString (target != null)
-         " --target=${target.config}";
-  };
+  NIX_CFLAGS_COMPILE = "-Wno-format-nonliteral";
+
+  # TODO(@Ericson2314): Always pass "--target" and always prefix.
+  configurePlatforms = [ "build" "host" ] ++ stdenv.lib.optional (stdenv.targetPlatform != stdenv.hostPlatform) "target";
+
+  configureFlags = with stdenv.lib; [
+    "--enable-targets=all" "--enable-64-bit-bfd"
+    "--disable-install-libbfd"
+    "--disable-shared" "--enable-static"
+    "--with-system-zlib"
+    "--with-system-readline"
+
+    "--with-gmp=${gmp.dev}"
+    "--with-mpfr=${mpfr.dev}"
+    "--with-expat" "--with-libexpat-prefix=${expat.dev}"
+  ] ++ stdenv.lib.optional (!pythonSupport) "--without-python";
 
   postInstall =
     '' # Remove Info files already provided by Binutils and other packages.
-       rm -v $out/share/info/{standards,configure,bfd}.info
+       rm -v $out/share/info/bfd.info
     '';
 
   # TODO: Investigate & fix the test failures.
@@ -76,7 +88,7 @@ stdenv.mkDerivation rec {
       program was doing at the moment it crashed.
     '';
 
-    homepage = http://www.gnu.org/software/gdb/;
+    homepage = https://www.gnu.org/software/gdb/;
 
     license = stdenv.lib.licenses.gpl3Plus;
 

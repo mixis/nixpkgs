@@ -1,23 +1,35 @@
-{ fetchurl, stdenv, go }:
+{ stdenv, fetchFromGitHub, buildGoPackage, bash, fetchpatch }:
 
-let
-  version = "2.4.0";
-in
-stdenv.mkDerivation {
+buildGoPackage rec {
   name = "direnv-${version}";
-  src = fetchurl {
-    url = "http://github.com/zimbatm/direnv/archive/v${version}.tar.gz";
-    name = "direnv-${version}.tar.gz";
-    sha256 = "aab8028cc1d68461dd1f6c3c9d000eef10273c52399fe5d1dd917f2f4a1a349a";
+  version = "2.18.2";
+  goPackagePath = "github.com/direnv/direnv";
+
+  src = fetchFromGitHub {
+    owner = "direnv";
+    repo = "direnv";
+    rev = "v${version}";
+    sha256 = "011isxsc3byg8jd4jhi4pdfqrxa1acnzirhcv7lvw3jl0v7xnma8";
   };
 
-  buildInputs = [ go ];
+  postConfigure = ''
+    cd $NIX_BUILD_TOP/go/src/$goPackagePath
+  '';
 
-  buildPhase = "make";
-  installPhase = "make install DESTDIR=$out";
+  # we have no bash at the moment for windows
+  makeFlags = stdenv.lib.optional (!stdenv.hostPlatform.isWindows) [
+    "BASH_PATH=${bash}/bin/bash"
+  ];
 
-  meta = {
-    description = "a shell extension that manages your environment";
+  installPhase = ''
+    mkdir -p $out
+    make install DESTDIR=$bin
+    mkdir -p $bin/share/fish/vendor_conf.d
+    echo "eval ($bin/bin/direnv hook fish)" > $bin/share/fish/vendor_conf.d/direnv.fish
+  '';
+
+  meta = with stdenv.lib; {
+    description = "A shell extension that manages your environment";
     longDescription = ''
       Once hooked into your shell direnv is looking for an .envrc file in your
       current directory before every prompt.
@@ -29,9 +41,8 @@ stdenv.mkDerivation {
       In short, this little tool allows you to have project-specific
       environment variables.
     '';
-    homepage = http://direnv.net;
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ stdenv.lib.maintainers.zimbatm ];
-    platforms = go.meta.platforms;
+    homepage = https://direnv.net;
+    license = licenses.mit;
+    maintainers = with maintainers; [ zimbatm ];
   };
 }

@@ -1,31 +1,45 @@
-{ stdenv, fetchgit, zlib, libpng, qt4, pkgconfig
-, withGamepads ? true, SDL # SDL is used for gamepad functionality
-}:
+{ stdenv, fetchFromGitHub, cmake, pkgconfig, qtbase, qtmultimedia
+, glew, libzip, snappy, zlib, withGamepads ? true, SDL2 }:
 
-let
-  version = "0.9.9.1";
-  fstat = x: fn: "-D" + fn + "=" + (if x then "ON" else "OFF");
-in stdenv.mkDerivation {
-  name = "PPSSPP-${version}";
+assert withGamepads -> (SDL2 != null);
+with stdenv.lib;
 
-  src = fetchgit {
-    url = "https://github.com/hrydgard/ppsspp.git";
-    sha256 = "0fdbda0b4dfbecacd01850f1767e980281fed4cc34a21df26ab3259242d8c352";
-    rev = "bf709790c4fed9cd211f755acaa650ace0f7555a";
+stdenv.mkDerivation rec {
+  name = "ppsspp-${version}";
+  version = "1.4.2";
+
+  src = fetchFromGitHub {
+    owner = "hrydgard";
+    repo = "ppsspp";
+    rev = "v${version}";
     fetchSubmodules = true;
+    sha256 = "0m4qkhx7q496sm7ibg2n7rm3npxzfr93iraxgndk0vhfk8vy8w75";
   };
 
-  buildInputs = [ zlib libpng pkgconfig qt4 ]
-                ++ (if withGamepads then [ SDL ] else [ ]);
+  patchPhase = ''
+    echo 'const char *PPSSPP_GIT_VERSION = "${src.rev}";' >> git-version.cpp
+    substituteInPlace UI/NativeApp.cpp --replace /usr/share $out/share
+  '';
 
-  configurePhase = "cd Qt && qmake PPSSPPQt.pro";
-  installPhase = "mkdir -p $out/bin && cp ppsspp $out/bin";
+  nativeBuildInputs = [ cmake pkgconfig ];
+  buildInputs = [ qtbase qtmultimedia glew libzip snappy zlib ]
+    ++ optionals withGamepads [ SDL2 SDL2.dev ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://www.ppsspp.org/";
-    description = "A PSP emulator, the Qt4 version.";
+  cmakeFlags = [ "-DCMAKE_BUILD_TYPE=Release" "-DUSING_QT_UI=ON" ];
+
+  installPhase = ''
+    mkdir -p $out/bin $out/share/ppsspp
+    mv PPSSPPQt $out/bin/ppsspp
+    mv assets $out/share/ppsspp
+  '';
+
+  enableParallelBuilding = true;
+
+  meta = {
+    homepage = https://www.ppsspp.org/;
+    description = "A PSP emulator for Android, Windows, Mac and Linux, written in C++";
     license = licenses.gpl2Plus;
-    maintainers = [ maintainers.fuuzetsu ];
+    maintainers = with maintainers; [ fuuzetsu AndersonTorres ];
     platforms = platforms.linux ++ platforms.darwin ++ platforms.cygwin;
   };
 }

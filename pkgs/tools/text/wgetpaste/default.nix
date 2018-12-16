@@ -1,11 +1,12 @@
-{ stdenv, fetchurl, wget, bash, coreutils }:
+{ stdenv, fetchurl, wget, bash }:
 
 stdenv.mkDerivation rec {
-  version = "2.25";
+  version = "2.28";
   name = "wgetpaste-${version}";
+
   src = fetchurl {
     url = "http://wgetpaste.zlin.dk/${name}.tar.bz2";
-    sha256 = "1x209j85mryp3hxmv1gfsbvw03k306k5fa65ky0zxx07cs70fzka";
+    sha256 = "1hh9svyypqcvdg5mjxyyfzpdzhylhf7s7xq5dzglnm4injx3i3ak";
   };
   # currently zsh-autocompletion support is not installed
 
@@ -22,8 +23,8 @@ stdenv.mkDerivation rec {
   meta = {
     description = "Command-line interface to various pastebins";
     homepage = http://wgetpaste.zlin.dk/;
-    license = "publicDomain";
-    maintainers = with stdenv.lib.maintainers; [ qknight iElectric ];
+    license = stdenv.lib.licenses.publicDomain;
+    maintainers = with stdenv.lib.maintainers; [ qknight domenkozar ndowens ];
     platforms = stdenv.lib.platforms.all;
   };
 }

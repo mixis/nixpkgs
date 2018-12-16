@@ -1,89 +1,117 @@
-{ stdenv, fetchurl, perl, gmp ? null
-, aclSupport ? false, acl ? null
+{ stdenv, lib, buildPackages
+, autoreconfHook, texinfo, fetchurl, perl, xz, libiconv, gmp ? null
+, aclSupport ? stdenv.isLinux, acl ? null
+, attrSupport ? stdenv.isLinux, attr ? null
 , selinuxSupport? false, libselinux ? null, libsepol ? null
+# No openssl in default version, so openssl-induced rebuilds aren't too big.
+# It makes *sum functions significantly faster.
+, minimal ? true, withOpenssl ? !minimal, openssl ? null
+, withPrefix ? false
+, singleBinary ? "symlinks" # you can also pass "shebangs" or false
 }:
 
 assert aclSupport -> acl != null;
 assert selinuxSupport -> libselinux != null && libsepol != null;
 
+with lib;
 
-with { inherit (stdenv.lib) optional optionals optionalString optionalAttrs; };
+stdenv.mkDerivation rec {
+  name = "coreutils-8.30";
 
-let
-  self = stdenv.mkDerivation (rec {
-    name = "coreutils-8.21";
+  src = fetchurl {
+    url = "mirror://gnu/coreutils/${name}.tar.xz";
+    sha256 = "0mxhw43d4wpqmvg0l4znk1vm10fy92biyh90lzdnqjcic2lb6cg8";
+  };
 
-    src = fetchurl {
-      url = "mirror://gnu/coreutils/${name}.tar.xz";
-      sha256 = "064f512185iysqqcvhnhaf3bfmzrvcgs7n405qsyp99zmfyl9amd";
-    };
+  patches = optional stdenv.hostPlatform.isCygwin ./coreutils-8.23-4.cygwin.patch;
 
-    patches = [ ./help2man.patch ];
+  # The test tends to fail on btrfs and maybe other unusual filesystems.
+  postPatch = ''
+    sed '2i echo Skipping dd sparse test && exit 0' -i ./tests/dd/sparse.sh
+    sed '2i echo Skipping cp sparse test && exit 0' -i ./tests/cp/sparse.sh
+    sed '2i echo Skipping rm deep-2 test && exit 0' -i ./tests/rm/deep-2.sh
+    sed '2i echo Skipping du long-from-unreadable test && exit 0' -i ./tests/du/long-from-unreadable.sh
+    sed '2i echo Skipping chmod setgid test && exit 0' -i ./tests/chmod/setgid.sh
+    sed '2i print "Skipping env -S test";  exit 0;' -i ./tests/misc/env-S.pl
+    substituteInPlace ./tests/install/install-C.sh \
+      --replace 'mode3=2755' 'mode3=1755'
+  '';
 
-    nativeBuildInputs = [ perl ];
-    buildInputs = [ gmp ]
-      ++ optional aclSupport acl
-      ++ optionals selinuxSupport [ libselinux libsepol ];
+  outputs = [ "out" "info" ];
 
-    crossAttrs = {
-      buildInputs = [ gmp ]
-        ++ optional aclSupport acl.crossDrv
-        ++ optionals selinuxSupport [ libselinux.crossDrv libsepol.crossDrv ]
-        ++ optional (stdenv.gccCross.libc ? libiconv)
-          stdenv.gccCross.libc.libiconv.crossDrv;
+  nativeBuildInputs = [ perl xz.bin ];
+  configureFlags = [ "--with-packager=https://NixOS.org" ]
+    ++ optional (singleBinary != false)
+      ("--enable-single-binary" + optionalString (isString singleBinary) "=${singleBinary}")
+    ++ optional withOpenssl "--with-openssl"
+    ++ optional stdenv.hostPlatform.isSunOS "ac_cv_func_inotify_init=no"
+    ++ optional withPrefix "--program-prefix=g"
+    ++ optionals (stdenv.hostPlatform != stdenv.buildPlatform && stdenv.hostPlatform.libc == "glibc") [
+      # TODO(19b98110126fde7cbb1127af7e3fe1568eacad3d): Needed for fstatfs() I
+      # don't know why it is not properly detected cross building with glibc.
+      "fu_cv_sys_stat_statfs2_bsize=yes"
+    ];
 
-      buildPhase = ''
-        make || (
-          pushd man
-          for a in *.x; do
-            touch `basename $a .x`.1
-          done
-          popd; make )
-      '';
 
-      postInstall = ''
-        rm $out/share/man/man1/*
-        cp ${self}/share/man/man1/* $out/share/man/man1
-      '';
+  buildInputs = [ gmp ]
+    ++ optional aclSupport acl
+    ++ optional attrSupport attr
+    ++ optional withOpenssl openssl
+    ++ optionals stdenv.hostPlatform.isCygwin [ autoreconfHook texinfo ]   # due to patch
+    ++ optionals selinuxSupport [ libselinux libsepol ]
+       # TODO(@Ericson2314): Investigate whether Darwin could benefit too
+    ++ optional (stdenv.hostPlatform != stdenv.buildPlatform && stdenv.hostPlatform.libc != "glibc") libiconv;
 
-      # Needed for fstatfs()
-      # I don't know why it is not properly detected cross building with glibc.
-      configureFlags = [ "fu_cv_sys_stat_statfs2_bsize=yes" ];
-      doCheck = false;
-    };
+  # The tests are known broken on Cygwin
+  # (http://thread.gmane.org/gmane.comp.gnu.core-utils.bugs/19025),
+  # Darwin (http://thread.gmane.org/gmane.comp.gnu.core-utils.bugs/19351),
+  # and {Open,Free}BSD.
+  # With non-standard storeDir: https://github.com/NixOS/nix/issues/512
+  doCheck = stdenv.hostPlatform == stdenv.buildPlatform
+    && stdenv.hostPlatform.libc == "glibc"
+    && builtins.storeDir == "/nix/store";
 
-    # The tests are known broken on Cygwin
-    # (http://thread.gmane.org/gmane.comp.gnu.core-utils.bugs/19025),
-    # Darwin (http://thread.gmane.org/gmane.comp.gnu.core-utils.bugs/19351),
-    # and {Open,Free}BSD.
-    doCheck = stdenv ? glibc;
+  # Prevents attempts of running 'help2man' on cross-built binaries.
+  PERL = if stdenv.hostPlatform == stdenv.buildPlatform then null else "missing";
 
-    # Saw random failures like ‘help2man: can't get '--help' info from
-    # man/sha512sum.td/sha512sum’.
-    enableParallelBuilding = false;
+  # Saw random failures like ‘help2man: can't get '--help' info from
+  # man/sha512sum.td/sha512sum’.
+  enableParallelBuilding = false;
 
-    NIX_LDFLAGS = optionalString selinuxSupport "-lsepol";
+  NIX_LDFLAGS = optionalString selinuxSupport "-lsepol";
+  FORCE_UNSAFE_CONFIGURE = optionalString stdenv.hostPlatform.isSunOS "1";
 
-    meta = {
-      homepage = http://www.gnu.org/software/coreutils/;
-      description = "The basic file, shell and text manipulation utilities of the GNU operating system";
+  # Works around a bug with 8.26:
+  # Makefile:3440: *** Recursive variable 'INSTALL' references itself (eventually).  Stop.
+  preInstall = optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    sed -i Makefile -e 's|^INSTALL =.*|INSTALL = ${buildPackages.coreutils}/bin/install -c|'
+  '';
 
-      longDescription = ''
-        The GNU Core Utilities are the basic file, shell and text
-        manipulation utilities of the GNU operating system.  These are
-        the core utilities which are expected to exist on every
-        operating system.
-      '';
+  postInstall = optionalString (stdenv.hostPlatform != stdenv.buildPlatform && !minimal) ''
+    rm $out/share/man/man1/*
+    cp ${buildPackages.coreutils-full}/share/man/man1/* $out/share/man/man1
+  ''
+  # du: 8.7 M locale + 0.4 M man pages
+  + optionalString minimal ''
+    rm -r "$out/share"
+  '';
 
-      license = stdenv.lib.licenses.gpl3Plus;
+  meta = {
+    homepage = https://www.gnu.org/software/coreutils/;
+    description = "The basic file, shell and text manipulation utilities of the GNU operating system";
 
-      maintainers = [ ];
-    };
-  } // optionalAttrs stdenv.isDarwin {
-    makeFlags = "CFLAGS=-D_FORTIFY_SOURCE=0";
-  });
-in
-  self
-  // stdenv.lib.optionalAttrs (stdenv.system == "armv7l-linux" || stdenv.isSunOS) {
-    FORCE_UNSAFE_CONFIGURE = 1;
-  }
+    longDescription = ''
+      The GNU Core Utilities are the basic file, shell and text
+      manipulation utilities of the GNU operating system.  These are
+      the core utilities which are expected to exist on every
+      operating system.
+    '';
+
+    license = licenses.gpl3Plus;
+
+    platforms = platforms.unix ++ platforms.windows;
+
+    maintainers = [ maintainers.eelco ];
+  };
+
+}

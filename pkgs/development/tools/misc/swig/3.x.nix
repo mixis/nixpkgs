@@ -1,35 +1,39 @@
-{ stdenv, fetchurl, pcre }:
+{ stdenv, fetchFromGitHub, autoconf, automake, libtool, bison, pcre, buildPackages }:
 
 stdenv.mkDerivation rec {
-  name = "swig-3.0.0";
+  name = "swig-${version}";
+  version = "3.0.12";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/swig/${name}.tar.gz";
-    sha256 = "99cab1055877d00280509f0e04c1fe76643ec3792e9b8e7efcc9aa6e247229df";
+  src = fetchFromGitHub {
+    owner = "swig";
+    repo = "swig";
+    rev = "rel-${version}";
+    sha256 = "1wyffskbkzj5zyhjnnpip80xzsjcr3p0q5486z3wdwabnysnhn8n";
   };
+
+  # for cross-compiling we need pcre.dev in nativeBuildInputs to get pcre-config
+  nativeBuildInputs = [ autoconf automake libtool bison pcre.dev ];
+  disallowedReferences = [ buildPackages.pcre.dev ];
 
   buildInputs = [ pcre ];
 
-  meta = {
+  configureFlags = [ "--without-tcl" ];
+
+  postPatch = ''
+    # Disable ccache documentation as it need yodl
+    sed -i '/man1/d' CCache/Makefile.in
+  '';
+
+  preConfigure = ''
+    ./autogen.sh
+  '';
+
+  meta = with stdenv.lib; {
     description = "SWIG, an interface compiler that connects C/C++ code to higher-level languages";
-
-    longDescription = ''
-       SWIG is an interface compiler that connects programs written in C and
-       C++ with languages such as Perl, Python, Ruby, Scheme, and Tcl.  It
-       works by taking the declarations found in C/C++ header files and using
-       them to generate the wrapper code that scripting languages need to
-       access the underlying C/C++ code.  In addition, SWIG provides a variety
-       of customization features that let you tailor the wrapping process to
-       suit your application.
-    '';
-
     homepage = http://swig.org/;
-
-    # Licensing is a mess: http://www.swig.org/Release/LICENSE .
-    license = "BSD-style";
-
-    platforms = stdenv.lib.platforms.linux;
-
-    maintainers = with stdenv.lib.maintainers; [ urkud ];
+    # Different types of licenses available: http://www.swig.org/Release/LICENSE .
+    license = licenses.gpl3Plus;
+    platforms = with platforms; linux ++ darwin;
+    maintainers = with maintainers; [ wkennington ];
   };
 }

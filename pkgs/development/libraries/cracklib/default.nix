@@ -1,18 +1,19 @@
-{ stdenv, fetchurl, libintlOrEmpty }:
+{ stdenv, fetchurl, zlib, gettext }:
 
 stdenv.mkDerivation rec {
-  name = "cracklib-2.9.1";
+  name = "cracklib-2.9.6";
 
   src = fetchurl {
-    url = "mirror://sourceforge/cracklib/${name}.tar.gz";
-    sha256 = "0mni2sz7350d4acs7gdl8nilfmnb8qhcvmxnpf6dr5wsag10b2a0";
+    url = "https://github.com/cracklib/cracklib/releases/download/${name}/${name}.tar.gz";
+    sha256 = "0hrkb0prf7n92w6rxgq0ilzkk6rkhpys2cfqkrbzswp27na7dkqp";
   };
 
-  buildInputs = libintlOrEmpty;
+  buildInputs = [ zlib gettext ];
 
   meta = with stdenv.lib; {
-    homepage    = http://sourceforge.net/projects/cracklib;
+    homepage    = https://github.com/cracklib/cracklib;
     description = "A library for checking the strength of passwords";
+    license = licenses.lgpl21; # Different license for the wordlist: http://www.openwall.com/wordlists
     maintainers = with maintainers; [ lovek323 ];
     platforms   = platforms.unix;
   };

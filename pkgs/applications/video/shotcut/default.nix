@@ -1,28 +1,50 @@
-{ stdenv, fetchurl, SDL, frei0r, gettext, makeWrapper, mlt, pkgconfig, qt5 }:
+{ stdenv, fetchFromGitHub, SDL2, frei0r, gettext, mlt, jack1, pkgconfig, qtbase
+, qtmultimedia, qtwebkit, qtx11extras, qtwebsockets, qtquickcontrols
+, qtgraphicaleffects, libmlt
+, qmake, makeWrapper, qttools }:
+
+assert stdenv.lib.versionAtLeast libmlt.version "6.8.0";
+assert stdenv.lib.versionAtLeast mlt.version "6.8.0";
 
 stdenv.mkDerivation rec {
   name = "shotcut-${version}";
-  version = "14.09";
+  version = "18.10.08";
 
-  src = fetchurl {
-    url = "https://github.com/mltframework/shotcut/archive/v${version}.tar.gz";
-    sha256 = "1504ds3ppqmpg84nb2gb74qndqysjwn3xw7n8xv19kd1pppnr10f";
+  src = fetchFromGitHub {
+    owner = "mltframework";
+    repo = "shotcut";
+    rev = "v${version}";
+    sha256 = "1s2zic675f7rx61j839fn86bwckb4823j9krv1q7z4hsvbpiyj08";
   };
 
-  buildInputs = [ SDL frei0r gettext makeWrapper mlt pkgconfig qt5 ];
+  enableParallelBuilding = true;
+  nativeBuildInputs = [ makeWrapper pkgconfig qmake ];
+  buildInputs = [
+    SDL2 frei0r gettext mlt libmlt
+    qtbase qtmultimedia qtwebkit qtx11extras qtwebsockets qtquickcontrols
+    qtgraphicaleffects
+  ];
 
-  configurePhase = "qmake PREFIX=$out";
+  NIX_CFLAGS_COMPILE = "-I${libmlt}/include/mlt++ -I${libmlt}/include/mlt";
+  qmakeFlags = [ "QMAKE_LRELEASE=${stdenv.lib.getDev qttools}/bin/lrelease" "SHOTCUT_VERSION=${version}" ];
+
+  prePatch = ''
+    sed 's_shotcutPath, "qmelt"_"${mlt}/bin/melt"_' -i src/jobs/meltjob.cpp
+    sed 's_shotcutPath, "ffmpeg"_"${mlt.ffmpeg}/bin/ffmpeg"_' -i src/jobs/ffmpegjob.cpp
+    NICE=$(type -P nice)
+    sed "s_/usr/bin/nice_''${NICE}_" -i src/jobs/meltjob.cpp src/jobs/ffmpegjob.cpp
+  '';
 
   postInstall = ''
     mkdir -p $out/share/shotcut
     cp -r src/qml $out/share/shotcut/
-    wrapProgram $out/bin/shotcut --prefix FREI0R_PATH : ${frei0r}/lib/frei0r-1
+    wrapProgram $out/bin/shotcut --prefix FREI0R_PATH : ${frei0r}/lib/frei0r-1 --prefix LD_LIBRARY_PATH : ${stdenv.lib.makeLibraryPath [ jack1 SDL2 ]} --prefix PATH : ${mlt}/bin
   '';
 
   meta = with stdenv.lib; {
     description = "A free, open source, cross-platform video editor";
     longDescription = ''
-      An offical binary for Shotcut, which includes all the
+      An official binary for Shotcut, which includes all the
       dependencies pinned to specific versions, is provided on
       http://shotcut.org.
 
@@ -30,9 +52,9 @@ stdenv.mkDerivation rec {
       nixpkgs maintainer(s). If you wish to report any bugs upstream,
       please use the official build from shotcut.org instead.
     '';
-    homepage = http://shotcut.org;
+    homepage = https://shotcut.org;
     license = licenses.gpl3;
-    maintainers = [ maintainers.goibhniu ];
+    maintainers = with maintainers; [ goibhniu woffs ];
     platforms = platforms.linux;
   };
 }

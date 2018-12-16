@@ -1,11 +1,11 @@
 {stdenv, fetchurl, openssh}:
 
-stdenv.mkDerivation {
-  name = "autossh-1.4d";
+stdenv.mkDerivation rec {
+  name = "autossh-1.4f";
   
   src = fetchurl {
-    url = "http://www.harding.motd.ca/autossh/autossh-1.4d.tgz";
-    sha256 = "05nwvqfyk0kbalwabj4z3xx11i0qdqg6xadzk17ckr5xb3j8y000";
+    url = "http://www.harding.motd.ca/autossh/${name}.tgz";
+    sha256 = "1wpqwa2872nqgqbhnb6nnkrlzpdawd5k69gh1qp68354pvhyawh1";
   };
   
   buildInputs = [ openssh ];
@@ -20,9 +20,10 @@ stdenv.mkDerivation {
       install -D -m644 autossh.1    $out/man/man1/autossh.1                   || return 1
     '';
     
-  meta = {
+  meta = with stdenv.lib; {
     homepage = http://www.harding.motd.ca/autossh/;
     description = "Automatically restart SSH sessions and tunnels";
-    platforms = stdenv.lib.platforms.linux;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ pSub ];
   };
 }

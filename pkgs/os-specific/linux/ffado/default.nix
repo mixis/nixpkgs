@@ -1,60 +1,67 @@
-{ stdenv, fetchurl, dbus, dbus_cplusplus, expat, glibmm, libconfig
-, libavc1394, libiec61883, libraw1394, libxmlxx, makeWrapper, pkgconfig
-, pyqt4, python, pythonDBus, qt4, scons }:
+{ stdenv, fetchurl, scons, pkgconfig, which, makeWrapper, python
+, expat, libraw1394, libconfig, libavc1394, libiec61883, libxmlxx
+, glibmm
+, alsaLib, dbus, dbus_cplusplus
+, pyqt4, dbus-python
+}:
 
 stdenv.mkDerivation rec {
-  name = "libffado-${version}";
-  version = "2.2.1";
+  name = "ffado-${version}";
+  version = "2.4.0";
 
   src = fetchurl {
-    url = "http://www.ffado.org/files/${name}.tgz";
-    sha256 = "1ximic90l0av91njb123ra2zp6mg23yg5iz8xa5371cqrn79nacz";
+    url = "http://www.ffado.org/files/libffado-${version}.tgz";
+    sha256 = "14rprlcd0gpvg9kljh0zzjzd2rc9hbqqpjidshxxjvvfh4r00f4f";
   };
 
-  buildInputs =
-    [ dbus dbus_cplusplus expat glibmm libavc1394 libconfig
-      libiec61883 libraw1394 libxmlxx makeWrapper pkgconfig pyqt4
-      python pythonDBus qt4 scons
-    ];
+  outputs = [ "out" "bin" "dev" ];
 
-  patches = [ ./enable-mixer-and-dbus.patch ];
+  nativeBuildInputs = [ scons pkgconfig which makeWrapper python ];
 
-  # SConstruct checks cpuinfo and an objdump of /bin/mount to determine the appropriate arch
-  # Let's just skip this and tell it which to build
-  postPatch = if stdenv.isi686 then ''
-    sed '/def is_userspace_32bit(cpuinfo):/a\
-        return True' -i SConstruct
-  ''
-  else ''
-    sed '/def is_userspace_32bit(cpuinfo):/a\
-        return False' -i SConstruct
+  prefixKey = "PREFIX=";
+  sconsFlags = [
+    "DEBUG=False"
+    "ENABLE_ALL=True"
+    "SERIALIZE_USE_EXPAT=True"
+    "BUILD_TESTS=False"
+    "WILL_DEAL_WITH_XDG_MYSELF=True"
+    "BUILD_MIXER=True"
+  ];
+
+  configurePhase = ''
+    mkdir -p $out/lib/udev/rules.d $bin/bin $dev/include \
+             $out/lib/${python.libPrefix}/site-packages
+    sconsFlagsArray+=(UDEVDIR=$out/lib/udev/rules.d)
+    sconsFlagsArray+=(PYPKGDIR=$out/lib/${python.libPrefix}/site-packages)
+    sconsFlagsArray+=(BINDIR=$bin/bin)
+    sconsFlagsArray+=(INCLUDEDIR=$dev/include)
+    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE $(pkg-config --cflags libxml++-2.6)"
   '';
 
-  # TODO fix ffado-diag, it doesn't seem to use PYPKGDIR
-  buildPhase = ''
-    export PYLIBSUFFIX=lib/${python.libPrefix}/site-packages
-    scons PYPKGDIR=$out/$PYLIBSUFFIX DEBUG=False
-    sed -e "s#/usr/local#$out#" -i support/mixer-qt4/ffado/config.py
-    '';
+  buildInputs = [
+    expat libraw1394 libconfig libavc1394 libiec61883 dbus dbus_cplusplus
+    libxmlxx pyqt4 dbus-python glibmm
+  ];
 
-  installPhase = ''
-    scons PREFIX=$out LIBDIR=$out/lib SHAREDIR=$out/share/libffado \
-      PYPKGDIR=$out/$PYLIBSUFFIX UDEVDIR=$out/lib/udev/rules.d install
+  postPatch = ''
+    sed '1iimport sys' -i SConstruct
+  '';
 
-    sed -e "s#/usr/local#$out#g" -i $out/bin/ffado-diag
-
-    PYDIR=$out/$PYLIBSUFFIX
-    wrapProgram $out/bin/ffado-mixer --prefix PYTHONPATH : \
-      $PYTHONPATH:$PYDIR:${pyqt4}/$LIBSUFFIX:${pythonDBus}/$LIBSUFFIX:
-    wrapProgram $out/bin/ffado-diag --prefix PYTHONPATH : \
-      $PYTHONPATH:$PYDIR:$out/share/libffado/python:${pyqt4}/$LIBSUFFIX:${pythonDBus}/$LIBSUFFIX:
-    '';
+  postInstall = ''
+    for exe in $bin/bin/ffado-mixer $bin/bin/ffado-diag; do
+      wrapProgram $exe \
+        --prefix PYTHONPATH : $out/lib/${python.libPrefix}/site-packages \
+        --prefix PYTHONPATH : $out/share/libffado/python \
+        --prefix PYTHONPATH : ${pyqt4}/lib/${python.libPrefix}/site-packages \
+        --prefix PYTHONPATH : ${dbus-python}/lib/${python.libPrefix}/site-packages
+    done
+  '';
 
   meta = with stdenv.lib; {
     homepage = http://www.ffado.org;
     description = "FireWire audio drivers";
     license = licenses.gpl3;
-    maintainers = [ maintainers.goibhniu ];
+    maintainers = with maintainers; [ goibhniu wkennington ];
     platforms = platforms.linux;
   };
 }

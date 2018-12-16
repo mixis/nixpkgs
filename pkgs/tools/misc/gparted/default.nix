@@ -1,26 +1,37 @@
-{ stdenv, fetchurl, parted, gtk, glib, intltool, gettext, libuuid
-, pkgconfig, gtkmm, libxml2 }:
+{ stdenv, fetchurl, intltool, gettext, makeWrapper
+, parted, glib, libuuid, pkgconfig, gtkmm2, libxml2, hicolor-icon-theme
+, gpart, hdparm, procps, utillinux
+}:
 
 stdenv.mkDerivation rec {
-  name = "gparted-0.19.1";
+  name = "gparted-0.32.0";
 
   src = fetchurl {
-    url = "mirror://sourceforge/gparted/${name}.tar.bz2";
-    sha256 = "1x0mbks94jpzphb8hm8w0iqjrn665jkdm4qnzrvxrnvy0x3m2fwd";
+    url = "mirror://sourceforge/gparted/${name}.tar.gz";
+    sha256 = "1fjp4c8jc0kjbbih1x1vs9v40d9lncma642kflnmy0bixxnvh7df";
   };
 
-  configureFlags = "--disable-doc";
+  configureFlags = [ "--disable-doc" ];
 
-  buildInputs = [
-    parted gtk glib intltool gettext libuuid pkgconfig gtkmm libxml2
-  ];
+  buildInputs = [ parted glib libuuid gtkmm2 libxml2 hicolor-icon-theme ];
+  nativeBuildInputs = [ intltool gettext makeWrapper pkgconfig ];
 
-  preFixup = "rm $out/share/icons/hicolor/icon-theme.cache";
+  postInstall = ''
+    wrapProgram $out/bin/gparted \
+      --prefix PATH : "${procps}/bin"
+    wrapProgram $out/sbin/gpartedbin \
+      --prefix PATH : "${stdenv.lib.makeBinPath [ gpart hdparm utillinux ]}"
+  '';
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Graphical disk partitioning tool";
-    homepage = http://gparted.sourceforge.net;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = with stdenv.lib.platforms; linux;
+    longDescription = ''
+      GNOME Partition Editor for creating, reorganizing, and deleting disk
+      partitions. GParted enables you to change the partition organization
+      while preserving the partition contents.
+    '';
+    homepage = https://gparted.org;
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
   };
 }

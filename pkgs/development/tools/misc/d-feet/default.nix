@@ -1,35 +1,30 @@
 { stdenv, pkgconfig, fetchurl, itstool, intltool, libxml2, glib, gtk3
-, pango, gdk_pixbuf, atk, pep8, python, makeWrapper, gnome3
-, pygobject3, gobjectIntrospection, libwnck3 }:
+, python3Packages, wrapGAppsHook, gnome3, libwnck3, gobject-introspection }:
 
 let
-  version = "${major}.8";
-  major = "0.3";
-in
-
-stdenv.mkDerivation rec {
-  name = "d-feet-${version}";
+  pname = "d-feet";
+  version = "0.3.13";
+in python3Packages.buildPythonApplication rec {
+  name = "${pname}-${version}";
+  format = "other";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/d-feet/${major}/d-feet-${version}.tar.xz";
-    sha256 = "e8423feb18fdff9b1465bf8442b78994ba13c12f8fa3b08e6a2f05768b4feee5";
+    url = "mirror://gnome/sources/d-feet/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
+    sha256 = "1md3lzs55sg04ds69dbginpxqvgg3qnf1lfx3vmsxph6bbd2y6ll";
   };
 
-  buildInputs = [
-    pkgconfig libxml2 itstool intltool glib gtk3 pep8 python
-    gnome3.gnome_icon_theme gnome3.gnome_icon_theme_symbolic
-    makeWrapper pygobject3 libwnck3
-  ];
+  nativeBuildInputs = [ pkgconfig itstool intltool wrapGAppsHook libxml2 ];
+  buildInputs = [ glib gtk3 gnome3.defaultIconTheme libwnck3 gobject-introspection ];
 
-  preFixup =
-    ''
-      wrapProgram $out/bin/d-feet \
-        --prefix PYTHONPATH : "$(toPythonPath $out):$(toPythonPath ${pygobject3})" \
-        --prefix GI_TYPELIB_PATH : "$GI_TYPELIB_PATH" \
-        --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS:$out/share"
+  propagatedBuildInputs = with python3Packages; [ pygobject3 pep8 ];
 
-      rm $out/share/icons/hicolor/icon-theme.cache
-    '';
+  passthru = {
+    updateScript = gnome3.updateScript {
+      packageName = pname;
+      attrPath = "dfeet";
+      versionPolicy = "none";
+    };
+  };
 
   meta = {
     description = "D-Feet is an easy to use D-Bus debugger";
@@ -39,8 +34,9 @@ stdenv.mkDerivation rec {
       and invoke methods on those interfaces.
     '';
 
-    homepage = https://wiki.gnome.org/action/show/Apps/DFeet;
+    homepage = https://wiki.gnome.org/Apps/DFeet;
     platforms = stdenv.lib.platforms.all;
+    license = stdenv.lib.licenses.gpl2;
     maintainers = with stdenv.lib.maintainers; [ ktosiek ];
   };
 }

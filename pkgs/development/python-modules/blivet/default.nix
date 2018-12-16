@@ -1,5 +1,5 @@
 { stdenv, fetchFromGitHub, buildPythonPackage, pykickstart, pyparted, pyblock
-, pyudev, six, libselinux, cryptsetup, multipath_tools, lsof, utillinux
+, pyudev, six, libselinux, cryptsetup, multipath-tools, lsof, utillinux
 }:
 
 let
@@ -7,19 +7,19 @@ let
   selinuxWithPython = libselinux.override pyenable;
   cryptsetupWithPython = cryptsetup.override pyenable;
 in buildPythonPackage rec {
-  name = "blivet-${version}";
+  pname = "blivet";
   version = "0.67";
 
   src = fetchFromGitHub {
     owner = "dwlehman";
     repo = "blivet";
-    rev = name;
+    rev = "${pname}-${version}";
     sha256 = "1gk94ghjrxfqnx53hph1j2s7qcv86fjz48is7l099q9c24rjv8ky";
   };
 
   postPatch = ''
     sed -i \
-      -e 's|"multipath"|"${multipath_tools}/sbin/multipath"|' \
+      -e 's|"multipath"|"${multipath-tools}/sbin/multipath"|' \
       -e '/^def set_friendly_names/a \    return False' \
       blivet/devicelibs/mpath.py
     sed -i -e '/"wipefs"/ {
@@ -28,21 +28,20 @@ in buildPythonPackage rec {
     }' blivet/formats/__init__.py
     sed -i -e 's|"lsof"|"${lsof}/bin/lsof"|' blivet/formats/fs.py
     sed -i -r -e 's|"(u?mount)"|"${utillinux}/bin/\1"|' blivet/util.py
-    sed -i -e '/pvscan/s/, *"--cache"//' blivet/devicelibs/lvm.py
   '';
 
   propagatedBuildInputs = [
-    pykickstart pyparted pyblock pyudev selinuxWithPython cryptsetupWithPython
+    pykickstart pyparted pyblock pyudev selinuxWithPython.py cryptsetupWithPython
     six
   ];
 
-  # Tests are in <nixos/tests/blivet.nix>.
+  # Tests are in nixos/tests/blivet.nix.
   doCheck = false;
 
-  meta = {
-    homepage = "https://fedoraproject.org/wiki/Blivet";
+  meta = with stdenv.lib; {
+    homepage = https://fedoraproject.org/wiki/Blivet;
     description = "Module for management of a system's storage configuration";
-    license = [ "GPLv2+" "LGPLv2.1+" ];
-    platforms = stdenv.lib.platforms.linux;
+    license = with licenses; [ gpl2Plus lgpl21Plus ];
+    platforms = platforms.linux;
   };
 }

@@ -1,56 +1,54 @@
-{ stdenv, fetchurl, autoconf, libtool, automake, libsodium, ncurses, libopus
+{ stdenv, fetchFromGitHub, cmake, libsodium, ncurses, libopus, msgpack
 , libvpx, check, libconfig, pkgconfig }:
 
 let
-  version = "900d72f951";
-  date = "20140921";
-in
-stdenv.mkDerivation rec {
-  name = "tox-core-${date}-${version}";
+  generic = { version, sha256 }:
+  stdenv.mkDerivation rec {
+    name = "libtoxcore-${version}";
 
-  src = fetchurl {
-    url = "https://github.com/irungentoo/toxcore/tarball/${version}";
-    name = "${name}.tar.gz";
-    sha256 = "1fwgflizb21mp4jwkfac7mgmahlly1f3ldbma6h8h6a2qf3pkn2r";
+    src = fetchFromGitHub {
+      owner  = "TokTok";
+      repo   = "c-toxcore";
+      rev    = "v${version}";
+      inherit sha256;
+    };
+
+    cmakeFlags = [
+      "-DBUILD_NTOX=ON"
+      "-DDHT_BOOTSTRAP=ON"
+      "-DBOOTSTRAP_DAEMON=ON"
+    ];
+
+    buildInputs = [
+      libsodium msgpack ncurses libconfig
+    ] ++ stdenv.lib.optionals (!stdenv.isAarch32) [
+      libopus libvpx
+    ];
+
+    nativeBuildInputs = [ cmake pkgconfig ];
+
+    enableParallelBuilding = true;
+
+    doCheck = false; # hangs, tries to access the net?
+    checkInputs = [ check ];
+
+    meta = with stdenv.lib; {
+      description = "P2P FOSS instant messaging application aimed to replace Skype";
+      homepage = https://tox.chat;
+      license = licenses.gpl3Plus;
+      maintainers = with maintainers; [ peterhoeg ];
+      platforms = platforms.all;
+    };
   };
 
-  NIX_LDFLAGS = "-lgcc_s";
+in rec {
+  libtoxcore_0_1 = generic {
+    version = "0.1.11";
+    sha256 = "1fya5gfiwlpk6fxhalv95n945ymvp2iidiyksrjw1xw95fzsp1ij";
+  };
 
-  postPatch = ''
-    # within Nix chroot builds, localhost is unresolvable
-    sed -i -e '/DEFTESTCASE(addr_resolv_localhost)/d' \
-      auto_tests/network_test.c
-    # takes WAAAY too long (~10 minutes) and would timeout
-    sed -i -e '/DEFTESTCASE[^(]*(many_clients\>/d' \
-      auto_tests/tox_test.c
-  '';
-
-  preConfigure = ''
-    autoreconf -i
-  '';
-
-  configureFlags = [
-    "--with-libsodium-headers=${libsodium}/include"
-    "--with-libsodium-libs=${libsodium}/lib"
-    "--enable-ntox"
-  ];
-
-  buildInputs = [
-    autoconf libtool automake libsodium ncurses
-    check libconfig pkgconfig
-  ] ++ stdenv.lib.optionals (!stdenv.isArm) [
-    libopus
-  ];
-
-  propagatedBuildInputs = stdenv.lib.optionals (!stdenv.isArm) [ libvpx ];
-
-  # Some tests fail in the Sheevaplug due to timeout
-  doCheck = !stdenv.isArm;
-
-  meta = {
-    description = "P2P FOSS instant messaging application aimed to replace Skype with crypto";
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = with stdenv.lib.maintainers; [ viric ];
-    platforms = stdenv.lib.platforms.all;
+  libtoxcore_0_2 = generic {
+    version = "0.2.8";
+    sha256 = "0xgnraysz25fbws5zwjk92mwnl8k1yih701qam8kgm3rxh50kyhm";
   };
 }

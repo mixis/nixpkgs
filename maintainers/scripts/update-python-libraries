@@ -1,0 +1,3 @@
+#!/bin/sh
+exec nix-shell -p "python3.withPackages(ps: with ps; [ packaging requests toolz ])" -p git --run pkgs/development/interpreters/python/update-python-libraries/update-python-libraries.py
+

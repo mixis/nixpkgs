@@ -1,6 +1,7 @@
-{ stdenv, lib, buildEnv, makeFontsConf, gnused, writeScript, xorg, bashInteractive, substituteAll, xterm, makeWrapper, ruby
-, openssl, quartz-wm, fontconfig, xkeyboard_config, xlsfonts, xfontsel
+{ stdenv, buildEnv, makeFontsConf, gnused, writeScript, xorg, bashInteractive, xterm, makeWrapper, ruby
+, quartz-wm, fontconfig, xlsfonts, xfontsel
 , ttf_bitstream_vera, freefont_ttf, liberation_ttf
+, cf-private
 , shell ? "${bashInteractive}/bin/bash"
 }:
 
@@ -37,7 +38,6 @@
 # that point into the user's profile.
 
 let
-  shellEscape = x: "'${lib.replaceChars ["'"] [("'\\'" + "'")] x}'";
   installer = writeScript "xquartz-install" ''
     NIX_LINK=$HOME/.nix-profile
 
@@ -61,7 +61,6 @@ let
     sudo launchctl load -w /Library/LaunchDaemons/$daemonName
   '';
   fontDirs = [
-    xorg.fontbhttf
     xorg.fontbhlucidatypewriter100dpi
     xorg.fontbhlucidatypewriter75dpi
     ttf_bitstream_vera
@@ -97,10 +96,18 @@ let
     ];
   };
 in stdenv.mkDerivation {
-  name = "xquartz";
-  buildInputs = [ ruby makeWrapper ];
+  name = "xquartz-${stdenv.lib.getVersion xorg.xorgserver}";
+
+  buildInputs = [
+    ruby makeWrapper
+    # Needed for NSDefaultRunLoopMode symbols.
+    cf-private
+  ];
+
   unpackPhase = "sourceRoot=.";
-  buildPhase = ":";
+
+  dontBuild = true;
+
   installPhase = ''
     cp -rT ${xorg.xinit} $out
     chmod -R u+w $out
@@ -109,8 +116,7 @@ in stdenv.mkDerivation {
 
     cp ${installer} $out/bin/xquartz-install
 
-    rm -r $out/LaunchAgents
-    rm -r $out/LaunchDaemons
+    rm -rf $out/LaunchAgents $out/LaunchDaemons
 
     fontsConfPath=$out/etc/X11/fonts.conf
     cp ${fontsConf} $fontsConfPath
@@ -125,29 +131,26 @@ in stdenv.mkDerivation {
       --replace "@DEFAULT_CLIENT@"    "${xterm}/bin/xterm" \
       --replace "@XINIT@"             "$out/bin/xinit" \
       --replace "@XINITRC@"           "$out/etc/X11/xinit/xinitrc" \
-      --replace "@XKEYBOARD_CONFIG@"  "${xkeyboard_config}/etc/X11/xkb" \
       --replace "@FONTCONFIG_FILE@"   "$fontsConfPath"
 
     wrapProgram $out/bin/Xquartz \
-      --set XQUARTZ_X11 $out/Applications/XQuartz.app/Contents/MacOS/X11 \
-      --set XKB_BINDIR "${xorg.xkbcomp}/bin"
+      --set XQUARTZ_X11 $out/Applications/XQuartz.app/Contents/MacOS/X11
 
     defaultStartX="$out/bin/startx -- $out/bin/Xquartz"
 
     ruby ${./patch_plist.rb} \
-      ${shellEscape (builtins.toXML {
+      ${stdenv.lib.escapeShellArg (builtins.toXML {
         XQUARTZ_DEFAULT_CLIENT = "${xterm}/bin/xterm";
         XQUARTZ_DEFAULT_SHELL  = "${shell}";
         XQUARTZ_DEFAULT_STARTX = "@STARTX@";
         FONTCONFIG_FILE        = "@FONTCONFIG_FILE@";
-        XKB_BINDIR             = "${xorg.xkbcomp}/bin";
       })} \
       $out/Applications/XQuartz.app/Contents/Info.plist
     substituteInPlace $out/Applications/XQuartz.app/Contents/Info.plist \
       --replace "@STARTX@"          "$defaultStartX" \
       --replace "@FONTCONFIG_FILE@" "$fontsConfPath"
 
-    rm $out/lib/X11/xinit/privileged_startx.d/*
+    mkdir -p $out/lib/X11/xinit/privileged_startx.d
     cp ${./privileged} $out/lib/X11/xinit/privileged_startx.d/privileged
     substituteInPlace $out/lib/X11/xinit/privileged_startx.d/privileged \
       --replace "@PATH@"            "$out/bin:${env}" \
@@ -160,7 +163,7 @@ in stdenv.mkDerivation {
       --replace "@ENCODINGSDIR@"    "${xorg.encodings}/share/fonts/X11/encodings" \
       --replace "@MKFONTDIR@"       "${xorg.mkfontdir}/bin/mkfontdir" \
       --replace "@MKFONTSCALE@"     "${xorg.mkfontscale}/bin/mkfontscale" \
-      --replace "@FC_CACHE@"        "${fontconfig}/bin/fc-cache" \
+      --replace "@FC_CACHE@"        "${fontconfig.bin}/bin/fc-cache" \
       --replace "@FONTCONFIG_FILE@" "$fontsConfPath"
 
     cp ${./xinitrc} $out/etc/X11/xinit/xinitrc
@@ -180,7 +183,8 @@ in stdenv.mkDerivation {
       --replace "@DEFAULT_CLIENT@"  "${xterm}/bin/xterm" \
       --replace "@FONTCONFIG_FILE@" "$fontsConfPath"
   '';
-  meta = with lib; {
+
+  meta = with stdenv.lib; {
     platforms   = platforms.darwin;
     maintainers = with maintainers; [ cstrahan ];
     license     = licenses.mit;

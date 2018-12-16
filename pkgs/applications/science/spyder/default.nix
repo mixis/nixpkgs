@@ -1,24 +1,23 @@
-{ stdenv, fetchurl, unzip, buildPythonPackage, makeDesktopItem
-# mandatory
-, pyside
-# recommended
-, pyflakes ? null, rope ? null, sphinx ? null, numpy ? null, scipy ? null, matplotlib ? null
-# optional
-, ipython ? null, pylint ? null, pep8 ? null
-}:
+{ stdenv, python3, makeDesktopItem }:
 
-buildPythonPackage rec {
-  name = "spyder-2.2.5";
-  namePrefix = "";
+python3.pkgs.buildPythonApplication rec {
+  pname = "spyder";
+  version = "3.2.8";
 
-  src = fetchurl {
-    url = "https://spyderlib.googlecode.com/files/${name}.zip";
-    sha256 = "1bxc5qs2bqc21s6kxljsfxnmwgrgnyjfr9mkwzg9njpqsran3bp2";
+  src = python3.pkgs.fetchPypi {
+    inherit pname version;
+    sha256 = "0iwcby2bxvayz0kp282yh864br55w6gpd8rqcdj1cp3jbn3q6vg5";
   };
 
-  buildInputs = [ unzip ];
-  propagatedBuildInputs =
-    [ pyside pyflakes rope sphinx numpy scipy matplotlib ipython pylint pep8 ];
+  # Somehow setuptools can't find pyqt5. Maybe because the dist-info folder is missing?
+  postPatch = ''
+    sed -i -e '/pyqt5/d' setup.py
+  '';
+
+  propagatedBuildInputs = with python3.pkgs; [
+    jedi pycodestyle psutil pyflakes rope numpy scipy matplotlib pylint
+    numpydoc qtconsole qtawesome nbconvert mccabe pyopengl cloudpickle
+  ];
 
   # There is no test for spyder
   doCheck = false;
@@ -35,11 +34,9 @@ buildPythonPackage rec {
 
   # Create desktop item
   postInstall = ''
-    mkdir -p $out/share/applications
-    cp $desktopItem/share/applications/* $out/share/applications/
-
     mkdir -p $out/share/icons
-    cp spyderlib/images/spyder.svg $out/share/icons/
+    cp spyder/images/spyder.svg $out/share/icons
+    cp -r $desktopItem/share/applications/ $out/share
   '';
 
   meta = with stdenv.lib; {
@@ -49,9 +46,8 @@ buildPythonPackage rec {
       environment for the Python language with advanced editing, interactive
       testing, debugging and introspection features.
     '';
-    homepage = https://code.google.com/p/spyderlib/;
+    homepage = https://github.com/spyder-ide/spyder/;
     license = licenses.mit;
     platforms = platforms.linux;
-    maintainers = [ maintainers.bjornfor ];
   };
 }

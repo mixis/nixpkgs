@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, glib, dbus_libs, libgcrypt, pkgconfig,
+{ stdenv, fetchurl, glib, dbus, libgcrypt, pkgconfig,
 intltool }:
 
 stdenv.mkDerivation {
@@ -9,10 +9,13 @@ stdenv.mkDerivation {
     sha256 = "030gka96kzqg1r19b4xrmac89hf1xj1kr5p461yvbzfxh46qqf2n";
   };
 
-  propagatedBuildInputs = [ glib dbus_libs libgcrypt ];
+  outputs = [ "out" "dev" ];
+
+  propagatedBuildInputs = [ glib dbus libgcrypt ];
   nativeBuildInputs = [ pkgconfig intltool ];
 
   meta = {
     inherit (glib.meta) platforms maintainers;
+    license = with stdenv.lib.licenses; [ gpl2 lgpl2 ];
   };
 }

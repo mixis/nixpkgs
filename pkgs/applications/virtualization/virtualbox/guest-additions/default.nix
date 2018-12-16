@@ -4,7 +4,14 @@
 let
   version = virtualbox.version;
   xserverVListFunc = builtins.elemAt (stdenv.lib.splitString "." xorg.xorgserver.version);
-  xserverABI = xserverVListFunc 0 + xserverVListFunc 1;
+
+  # Forced to 1.18 in <nixpkgs/nixos/modules/services/x11/xserver.nix>
+  # as it even fails to build otherwise.  Still, override this even here,
+  # in case someone does just a standalone build
+  # (not via videoDrivers = ["vboxvideo"]).
+  # It's likely to work again in some future update.
+  xserverABI = let abi = xserverVListFunc 0 + xserverVListFunc 1;
+    in if abi == "119" then "118" else abi;
 in
 
 stdenv.mkDerivation {
@@ -12,80 +19,96 @@ stdenv.mkDerivation {
 
   src = fetchurl {
     url = "http://download.virtualbox.org/virtualbox/${version}/VBoxGuestAdditions_${version}.iso";
-    sha256 = "d58f678613bd37f5f94bcf324708af63572fc8582833a2558574090231fd080f";
+    sha256 = "e51e33500a265b5c2d7bb2d03d32208df880523dfcb1e2dde2c78a0e0daa0603";
   };
 
-  KERN_DIR = "${kernel.dev}/lib/modules/*/build";
+  KERN_DIR = "${kernel.dev}/lib/modules/${kernel.modDirVersion}/build";
+  KERN_INCL = "${kernel.dev}/lib/modules/${kernel.modDirVersion}/source/include";
 
-  buildInputs = [ patchelf cdrkit makeWrapper dbus ];
+  patchFlags = [ "-p1" "-d" "install/src/vboxguest-${version}" ];
+
+  patches = [
+    ./fix_kerndir.patch
+    ./fix_kernincl.patch
+  ];
+
+  hardeningDisable = [ "pic" ];
+
+  NIX_CFLAGS_COMPILE = "-Wno-error=incompatible-pointer-types -Wno-error=implicit-function-declaration";
+
+  nativeBuildInputs = [ patchelf makeWrapper ];
+  buildInputs = [ cdrkit dbus ] ++ kernel.moduleBuildDependencies;
 
   installPhase = ''
     mkdir -p $out
     cp -r install/* $out
-
   '';
 
   buildCommand = with xorg; ''
-    ${if stdenv.system == "i686-linux" || stdenv.system == "x86_64-linux" then ''
+    ${if stdenv.hostPlatform.system == "i686-linux" || stdenv.hostPlatform.system == "x86_64-linux" then ''
         isoinfo -J -i $src -x /VBoxLinuxAdditions.run > ./VBoxLinuxAdditions.run
         chmod 755 ./VBoxLinuxAdditions.run
         ./VBoxLinuxAdditions.run --noexec --keep
       ''
-      else throw ("Architecture: "+stdenv.system+" not supported for VirtualBox guest additions")
+      else throw ("Architecture: "+stdenv.hostPlatform.system+" not supported for VirtualBox guest additions")
     }
 
     # Unpack files
     cd install
-    ${if stdenv.system == "i686-linux" then ''
+    ${if stdenv.hostPlatform.system == "i686-linux" then ''
         tar xfvj VBoxGuestAdditions-x86.tar.bz2
       ''
-      else if stdenv.system == "x86_64-linux" then ''
+      else if stdenv.hostPlatform.system == "x86_64-linux" then ''
         tar xfvj VBoxGuestAdditions-amd64.tar.bz2
       ''
-      else throw ("Architecture: "+stdenv.system+" not supported for VirtualBox guest additions")
+      else throw ("Architecture: "+stdenv.hostPlatform.system+" not supported for VirtualBox guest additions")
     }
 
+    cd ../
+    patchPhase
+    cd install/src
 
     # Build kernel modules
-    cd src
+    export INSTALL_MOD_PATH=$out
 
-    for i in *
-    do
-        cd $i
-        find . -type f | xargs sed 's/depmod -a/true/' -i
-        make
-        cd ..
-    done
+    find . -type f | xargs sed 's/depmod -a/true/' -i
 
-    cd ..
+    cd vboxguest-${version}
+
+    make
+
+    cd ../..
 
     # Change the interpreter for various binaries
-    for i in sbin/VBoxService bin/{VBoxClient,VBoxControl} lib/VBoxGuestAdditions/mount.vboxsf
+    for i in sbin/VBoxService bin/{VBoxClient,VBoxControl} other/mount.vboxsf
     do
-        ${if stdenv.system == "i686-linux" then ''
-          patchelf --set-interpreter ${stdenv.glibc}/lib/ld-linux.so.2 $i
+        ${if stdenv.hostPlatform.system == "i686-linux" then ''
+          patchelf --set-interpreter ${stdenv.glibc.out}/lib/ld-linux.so.2 $i
         ''
-        else if stdenv.system == "x86_64-linux" then ''
-          patchelf --set-interpreter ${stdenv.glibc}/lib/ld-linux-x86-64.so.2 $i
+        else if stdenv.hostPlatform.system == "x86_64-linux" then ''
+          patchelf --set-interpreter ${stdenv.glibc.out}/lib/ld-linux-x86-64.so.2 $i
         ''
-        else throw ("Architecture: "+stdenv.system+" not supported for VirtualBox guest additions")
+        else throw ("Architecture: "+stdenv.hostPlatform.system+" not supported for VirtualBox guest additions")
         }
-        patchelf --set-rpath ${stdenv.gcc.gcc}/lib:${dbus}/lib:${libX11}/lib:${libXt}/lib:${libXext}/lib:${libXmu}/lib:${libXfixes}/lib:${libXrandr}/lib:${libXcursor}/lib $i
+        patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc dbus libX11 libXt libXext libXmu libXfixes libXrandr libXcursor ]} $i
     done
 
     for i in lib/VBoxOGL*.so
     do
-        patchelf --set-rpath $out/lib:${dbus}/lib $i
+        patchelf --set-rpath ${lib.makeLibraryPath [ "$out" dbus libXcomposite libXdamage libXext libXfixes ]} $i
     done
 
+    # FIXME: Virtualbox 4.3.22 moved VBoxClient-all (required by Guest Additions
+    # NixOS module) to 98vboxadd-xclient. For now, just work around it:
+    mv other/98vboxadd-xclient bin/VBoxClient-all
+
     # Remove references to /usr from various scripts and files
-    sed -i -e "s|/usr/bin|$out/bin|" share/VBoxGuestAdditions/vboxclient.desktop
+    sed -i -e "s|/usr/bin|$out/bin|" other/vboxclient.desktop
     sed -i -e "s|/usr/bin|$out/bin|" bin/VBoxClient-all
 
     # Install binaries
-    mkdir -p $out/sbin
-    install -m 4755 lib/VBoxGuestAdditions/mount.vboxsf $out/sbin/mount.vboxsf
-    install -m 755 sbin/VBoxService $out/sbin
+    install -D -m 755 other/mount.vboxsf $out/bin/mount.vboxsf
+    install -D -m 755 sbin/VBoxService $out/bin/VBoxService
 
     mkdir -p $out/bin
     install -m 755 bin/VBoxClient $out/bin
@@ -103,11 +126,11 @@ stdenv.mkDerivation {
 
     # Install desktop file
     mkdir -p $out/share/autostart
-    cp -v share/VBoxGuestAdditions/vboxclient.desktop $out/share/autostart
+    cp -v other/vboxclient.desktop $out/share/autostart
 
     # Install Xorg drivers
     mkdir -p $out/lib/xorg/modules/{drivers,input}
-    install -m 644 lib/VBoxGuestAdditions/vboxvideo_drv_${xserverABI}.so $out/lib/xorg/modules/drivers/vboxvideo_drv.so
+    install -m 644 other/vboxvideo_drv_${xserverABI}.so $out/lib/xorg/modules/drivers/vboxvideo_drv.so
 
     # Install kernel modules
     cd src
@@ -126,7 +149,7 @@ stdenv.mkDerivation {
 
   meta = {
     description = "Guest additions for VirtualBox";
-    longDescriptions = ''
+    longDescription = ''
       Various add-ons which makes NixOS work better as guest OS inside VirtualBox.
       This add-on provides support for dynamic resizing of the X Display, shared
       host/guest clipboard support and guest OpenGL support.

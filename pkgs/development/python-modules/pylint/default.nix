@@ -1,23 +1,48 @@
-{ stdenv, fetchurl, pythonPackages }:
+{ stdenv, lib, buildPythonPackage, fetchPypi, python, pythonOlder, astroid,
+  isort, mccabe, pytest, pytestrunner, pyenchant }:
 
-pythonPackages.buildPythonPackage rec {
-  name = "pylint-1.2.1";
-  namePrefix = "";
+buildPythonPackage rec {
+  pname = "pylint";
+  version = "2.2.2";
 
-  src = fetchurl {
-    url = "https://pypi.python.org/packages/source/p/pylint/${name}.tar.gz";
-    sha256 = "0q7zj5hgmz27wifhcqyaddc9yc5b2q6p16788zzm3da6qshv7xk3";
+  disabled = pythonOlder "3.4";
+
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "14klyan9lqanyi8qhrbn65k7bgv9p7i7ply662r2lr27wydf57b8";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ astroid ];
+  checkInputs = [ pytest pytestrunner pyenchant ];
+
+  propagatedBuildInputs = [ astroid isort mccabe ];
+
+  postPatch = lib.optionalString stdenv.isDarwin ''
+    # Remove broken darwin test
+    rm -vf pylint/test/test_functional.py
+  '';
+
+  checkPhase = ''
+    pytest pylint/test -k "not ${lib.concatStringsSep " and not " (
+      # Broken test
+      [ "test_good_comprehension_checks" ] ++
+      # Disable broken darwin tests
+      lib.optionals stdenv.isDarwin [
+        "test_parallel_execution"
+        "test_py3k_jobs_option"
+      ]
+    )}"
+  '';
 
   postInstall = ''
     mkdir -p $out/share/emacs/site-lisp
     cp "elisp/"*.el $out/share/emacs/site-lisp/
   '';
 
-  meta = {
-    homepage = http://www.logilab.org/project/pylint;
+  meta = with lib; {
+    homepage = https://github.com/PyCQA/pylint;
     description = "A bug and style checker for Python";
+    platforms = platforms.all;
+    license = licenses.gpl1Plus;
+    maintainers = with maintainers; [ nand0p ];
   };
 }

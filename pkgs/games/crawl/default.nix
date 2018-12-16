@@ -1,24 +1,56 @@
-{ stdenv, fetchurl, sqlite, lua, which, zlib, pkgconfig, dejavu_fonts,
-  libpng, perl, SDL, SDL_image, ncurses, mesa}:
+{ stdenv, lib, fetchFromGitHub, which, sqlite, lua5_1, perl, zlib, pkgconfig, ncurses
+, dejavu_fonts, libpng, SDL2, SDL2_image, libGLU_combined, freetype, pngcrush, advancecomp
+, tileMode ? false
+}:
 
 stdenv.mkDerivation rec {
-   name = "crawl-0.14.1";
-   src = fetchurl {
-      url = "http://downloads.sourceforge.net/project/crawl-ref/Stone%20Soup/0.14.1/stone_soup-0.14.1-nodeps.tar.xz";
-      sha256 = "91726d0224b93ba26b5d4bd3762bc5aabe1f02974ea6c937be89dc6c6ab7a4dd";
-      };
+  name = "crawl-${version}${lib.optionalString tileMode "-tiles"}";
+  version = "0.22.1";
 
-   patches = [ ./makefile_fonts.patch ./makefile_sqlite.patch
-               ./makefile_rltiles.patch ./makefile_rltiles2.patch
-               ./makefile_misc.patch ./makefile_prefix.patch
-   ];
+  src = fetchFromGitHub {
+    owner = "crawl-ref";
+    repo = "crawl-ref";
+    rev = version;
+    sha256 = "19yzl241glv2zazifgz59bw3jlh4hj59xx5w002hnh9rp1w15rnr";
+  };
 
-   buildInputs = [stdenv pkgconfig lua zlib sqlite which libpng perl SDL
-                  dejavu_fonts SDL_image ncurses mesa];
+  # Patch hard-coded paths in the makefile
+  patches = [ ./crawl_purify.patch ];
 
-   preBuild = "cd source";
+  nativeBuildInputs = [ pkgconfig which perl pngcrush advancecomp ];
 
-   makeFlags = "TILES=y";
+  # Still unstable with luajit
+  buildInputs = [ lua5_1 zlib sqlite ncurses ]
+                ++ lib.optionals tileMode [ libpng SDL2 SDL2_image freetype libGLU_combined ];
 
-   inherit dejavu_fonts sqlite SDL_image SDL;
+  preBuild = ''
+    cd crawl-ref/source
+    echo "${version}" > util/release_ver
+    patchShebangs 'util'
+    patchShebangs util/gen-mi-enum
+    rm -rf contrib
+  '';
+
+  fontsPath = lib.optionalString tileMode dejavu_fonts;
+
+  makeFlags = [ "prefix=$(out)" "FORCE_CC=cc" "FORCE_CXX=c++" "HOSTCXX=c++"
+                "SAVEDIR=~/.crawl" "sqlite=${sqlite.dev}"
+              ] ++ lib.optional tileMode "TILES=y";
+
+  postInstall = lib.optionalString tileMode "mv $out/bin/crawl $out/bin/crawl-tiles";
+
+  enableParallelBuilding = true;
+
+  meta = with stdenv.lib; {
+    description = "Open-source, single-player, role-playing roguelike game";
+    homepage = http://crawl.develz.org/;
+    longDescription = ''
+      Open-source, single-player, role-playing roguelike game of exploration and
+      treasure-hunting in dungeons filled with dangerous and unfriendly monsters
+      in a quest to rescue the mystifyingly fabulous Orb of Zot.
+    '';
+    platforms = platforms.linux;
+    license = with licenses; [ gpl2Plus bsd2 bsd3 mit licenses.zlib cc0 ];
+    maintainers = [ maintainers.abbradar ];
+  };
 }

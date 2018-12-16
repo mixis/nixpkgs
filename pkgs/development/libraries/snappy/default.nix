@@ -1,28 +1,30 @@
-{ stdenv, fetchFromGitHub, pkgconfig, autoreconfHook }:
+{ stdenv, fetchFromGitHub, cmake }:
 
 stdenv.mkDerivation rec {
-  name = "snappy-1.1.2";
-  
+  name = "snappy-${version}";
+  version = "1.1.7";
+
   src = fetchFromGitHub {
     owner = "google";
     repo = "snappy";
-    rev = "1ff9be9b8fafc8528ca9e055646f5932aa5db9c4";
-    sha256 = "1zyjj13max0z42g3ii54n3qn7rbcga34dbi26lpm7v5ya752shx7";
+    rev = "${version}";
+    sha256 = "1x7r8sjmdqlqjz0xfiwdyrqpgaj5yrvrgb28ivgpvnxgar5qv6m2";
   };
 
-  buildInputs = [ pkgconfig autoreconfHook ];
+  patches = [ ./disable-benchmark.patch ];
 
-  preConfigure = ''
-    sh autogen.sh
-  '';
+  outputs = [ "out" "dev" ];
 
-  # -DNDEBUG for speed
-  configureFlags = [ "CXXFLAGS=-DNDEBUG" ];
+  nativeBuildInputs = [ cmake ];
+
+  cmakeFlags = [ "-DBUILD_SHARED_LIBS=ON" "-DCMAKE_SKIP_BUILD_RPATH=OFF" ];
+
+  checkTarget = "test";
 
   doCheck = true;
 
   meta = with stdenv.lib; {
-    homepage = http://code.google.com/p/snappy/;
+    homepage = https://google.github.io/snappy/;
     license = licenses.bsd3;
     description = "Compression/decompression library for very high speeds";
     platforms = platforms.unix;

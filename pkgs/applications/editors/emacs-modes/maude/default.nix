@@ -9,12 +9,12 @@ stdenv.mkDerivation {
   };
 
   buildInputs = [emacs];
-  configureFlags = "--with-lispdir=$$out/share/emacs/site-lisp";
+  configureFlags = [ "--with-lispdir=$$out/share/emacs/site-lisp" ];
 
   meta = {
     description = "Emacs mode for the programming language Maude";
     license = stdenv.lib.licenses.gpl2;
     platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.simons ];
+    maintainers = [ stdenv.lib.maintainers.peti ];
   };
 }

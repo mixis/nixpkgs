@@ -1,5 +1,6 @@
-{ stdenv, fetchurl, pkgconfig, glib, systemd, boost
+{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, glib, systemd, boost, darwin
 , alsaSupport ? true, alsaLib
+, avahiSupport ? true, avahi, dbus
 , flacSupport ? true, flac
 , vorbisSupport ? true, libvorbis
 , madSupport ? true, libmad
@@ -17,26 +18,45 @@
 , mmsSupport ? true, libmms
 , mpg123Support ? true, mpg123
 , aacSupport ? true, faad2
-, pulseaudioSupport ? true, pulseaudio
+, lameSupport ? true, lame
+, pulseaudioSupport ? true, libpulseaudio
+, jackSupport ? true, libjack2
+, gmeSupport ? true, game-music-emu
 , icuSupport ? true, icu
+, clientSupport ? true, mpd_clientlib
+, opusSupport ? true, libopus
+, soundcloudSupport ? true, yajl
+, nfsSupport ? true, libnfs
+, smbSupport ? true, samba
 }:
+
+assert avahiSupport -> avahi != null && dbus != null;
 
 let
   opt = stdenv.lib.optional;
   mkFlag = c: f: if c then "--enable-${f}" else "--disable-${f}";
-  major = "0.19";
-  minor = "1";
+  major = "0.20";
+  minor = "23";
 
 in stdenv.mkDerivation rec {
-  name = "mpd-${major}.${minor}";
-  src = fetchurl {
-    url    = "http://www.musicpd.org/download/mpd/${major}/${name}.tar.gz";
-    sha256 = "08a8wgr1kp86nnf9xbc71l9py1plslp10xw0ah344imkwyfg0nj8";
+  name = "mpd-${version}";
+  version = "${major}${if minor == "" then "" else "." + minor}";
+
+  src = fetchFromGitHub {
+    owner  = "MusicPlayerDaemon";
+    repo   = "MPD";
+    rev    = "v${version}";
+    sha256 = "1z1pdgiddimnmck0ardrpxkvgk1wn9zxri5wfv5ppasbb7kfm350";
   };
 
-  buildInputs = [ pkgconfig glib boost ]
+  patches = [ ./x86.patch ];
+
+  buildInputs = [ glib boost ]
+    ++ opt stdenv.isDarwin darwin.apple_sdk.frameworks.CoreAudioKit
     ++ opt stdenv.isLinux systemd
     ++ opt (stdenv.isLinux && alsaSupport) alsaLib
+    ++ opt avahiSupport avahi
+    ++ opt avahiSupport dbus
     ++ opt flacSupport flac
     ++ opt vorbisSupport libvorbis
     # using libmad to decode mp3 files on darwin is causing a segfault -- there
@@ -55,9 +75,21 @@ in stdenv.mkDerivation rec {
     ++ opt mmsSupport libmms
     ++ opt mpg123Support mpg123
     ++ opt aacSupport faad2
+    ++ opt lameSupport lame
     ++ opt zipSupport zziplib
-    ++ opt pulseaudioSupport pulseaudio
-    ++ opt icuSupport icu;
+    ++ opt (!stdenv.isDarwin && pulseaudioSupport) libpulseaudio
+    ++ opt (!stdenv.isDarwin && jackSupport) libjack2
+    ++ opt gmeSupport game-music-emu
+    ++ opt icuSupport icu
+    ++ opt clientSupport mpd_clientlib
+    ++ opt opusSupport libopus
+    ++ opt soundcloudSupport yajl
+    ++ opt (!stdenv.isDarwin && nfsSupport) libnfs
+    ++ opt (!stdenv.isDarwin && smbSupport) samba;
+
+  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+
+  enableParallelBuilding = true;
 
   configureFlags =
     [ (mkFlag (!stdenv.isDarwin && alsaSupport) "alsa")
@@ -79,10 +111,19 @@ in stdenv.mkDerivation rec {
       (mkFlag mmsSupport "mms")
       (mkFlag mpg123Support "mpg123")
       (mkFlag aacSupport "aac")
-      (mkFlag pulseaudioSupport "pulse")
+      (mkFlag lameSupport "lame-encoder")
+      (mkFlag (!stdenv.isDarwin && pulseaudioSupport) "pulse")
+      (mkFlag (!stdenv.isDarwin && jackSupport) "jack")
       (mkFlag stdenv.isDarwin "osx")
       (mkFlag icuSupport "icu")
+      (mkFlag gmeSupport "gme")
+      (mkFlag clientSupport "libmpdclient")
+      (mkFlag opusSupport "opus")
+      (mkFlag soundcloudSupport "soundcloud")
+      (mkFlag (!stdenv.isDarwin && nfsSupport) "libnfs")
+      (mkFlag (!stdenv.isDarwin && smbSupport) "smbclient")
       "--enable-debug"
+      "--with-zeroconf=avahi"
     ]
     ++ opt stdenv.isLinux
       "--with-systemdsystemunitdir=$(out)/etc/systemd/system";
@@ -95,7 +136,7 @@ in stdenv.mkDerivation rec {
     description = "A flexible, powerful daemon for playing music";
     homepage    = http://mpd.wikia.com/wiki/Music_Player_Daemon_Wiki;
     license     = licenses.gpl2;
-    maintainers = with maintainers; [ astsmtl fuuzetsu ];
+    maintainers = with maintainers; [ astsmtl fuuzetsu ehmry fpletz ];
     platforms   = platforms.unix;
 
     longDescription = ''

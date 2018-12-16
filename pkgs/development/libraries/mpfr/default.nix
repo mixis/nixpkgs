@@ -1,30 +1,29 @@
 { stdenv, fetchurl, gmp }:
 
 stdenv.mkDerivation rec {
-  name = "mpfr-3.1.2";
+  version = "4.0.1";
+  name = "mpfr-${version}";
 
   src = fetchurl {
-    url = "mirror://gnu/mpfr/${name}.tar.bz2";
-    sha256 = "0sqvpfkzamxdr87anzakf9dhkfh15lfmm5bsqajk02h1mxh3zivr";
+    url = "mirror://gnu/mpfr/${name}.tar.xz";
+    sha256 = "0vp1lrc08gcmwdaqck6bpzllkrykvp06vz5gnqpyw0v3h9h4m1v7";
   };
 
-  buildInputs = [ gmp ];
+  outputs = [ "out" "dev" "doc" "info" ];
+
+  # mpfr.h requires gmp.h
+  propagatedBuildInputs = [ gmp ];
 
   configureFlags =
-    /* Work around a FreeBSD bug that otherwise leads to segfaults in the test suite:
-          http://hydra.bordeaux.inria.fr/build/34862
-          http://websympa.loria.fr/wwsympa/arc/mpfr/2011-10/msg00015.html
-          http://www.freebsd.org/cgi/query-pr.cgi?pr=161344
-      */
-    stdenv.lib.optional (stdenv.isSunOS or stdenv.isFreeBSD) "--disable-thread-safe" ++
-    stdenv.lib.optional stdenv.is64bit "--with-pic";
+    stdenv.lib.optional stdenv.hostPlatform.isSunOS "--disable-thread-safe" ++
+    stdenv.lib.optional stdenv.hostPlatform.is64bit "--with-pic";
 
-  doCheck = true;
+  doCheck = true; # not cross;
 
   enableParallelBuilding = true;
 
   meta = {
-    homepage = http://www.mpfr.org/;
+    homepage = https://www.mpfr.org/;
     description = "Library for multiple-precision floating-point arithmetic";
 
     longDescription = ''
@@ -41,7 +40,7 @@ stdenv.mkDerivation rec {
 
     license = stdenv.lib.licenses.lgpl2Plus;
 
-    maintainers = [ stdenv.lib.maintainers.ludo ];
+    maintainers = [ ];
     platforms = stdenv.lib.platforms.all;
   };
 }

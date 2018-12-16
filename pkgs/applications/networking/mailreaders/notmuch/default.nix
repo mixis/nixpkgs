@@ -1,52 +1,89 @@
-{ fetchurl, stdenv, bash, emacs, fixDarwinDylibNames,
-  gdb, glib, gmime, gnupg,
-  pkgconfig, talloc, xapian
+{ fetchurl, stdenv
+, pkgconfig, gnupg
+, xapian, gmime, talloc, zlib
+, doxygen, perl
+, pythonPackages
+, bash-completion
+, emacs
+, ruby
+, which, dtach, openssl, bash, gdb, man
 }:
 
-stdenv.mkDerivation rec {
-  name = "notmuch-0.18.1";
+with stdenv.lib;
 
-  src = fetchurl {
-    url = "http://notmuchmail.org/releases/${name}.tar.gz";
-    sha256 = "1pdp9l7yv71d3fjb30qyccva8h03hvg88q4a00yi50v2j70kvmgj";
+stdenv.mkDerivation rec {
+  version = "0.28";
+  name = "notmuch-${version}";
+
+  passthru = {
+    pythonSourceRoot = "${name}/bindings/python";
+    inherit version;
   };
 
-  buildInputs = [ bash emacs gdb glib gmime gnupg pkgconfig talloc xapian ]
-    ++ stdenv.lib.optionals stdenv.isDarwin [ fixDarwinDylibNames ];
+  src = fetchurl {
+    url = "https://notmuchmail.org/releases/${name}.tar.gz";
+    sha256 = "0dqarmjc8544m2w7bqrqmvsfy55fw82707z3lz9cql8nr777bjmc";
+  };
 
-  patchPhase = ''
-    find test -type f -exec \
-      sed -i \
-        "1s_#!/usr/bin/env bash_#!${bash}/bin/bash_" \
-        "{}" ";"
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [
+    gnupg # undefined dependencies
+    xapian gmime talloc zlib  # dependencies described in INSTALL
+    doxygen perl  # (optional) api docs
+    pythonPackages.sphinx pythonPackages.python  # (optional) documentation -> doc/INSTALL
+    bash-completion  # (optional) dependency to install bash completion
+    emacs  # (optional) to byte compile emacs code, also needed for tests
+    ruby  # (optional) ruby bindings
+  ];
+
+  postPatch = ''
+    patchShebangs configure
+    patchShebangs test/
 
     for src in \
-      crypto.c \
-      emacs/notmuch-crypto.el
+      util/crypto.c \
+      notmuch-config.c
     do
       substituteInPlace "$src" \
-        --replace \"gpg\" \"${gnupg}/bin/gpg2\"
+        --replace \"gpg\" \"${gnupg}/bin/gpg\"
     done
+
+    substituteInPlace lib/Makefile.local \
+      --replace '-install_name $(libdir)' "-install_name $out/lib"
   '';
 
-  preFixup = if stdenv.isDarwin then
-    ''
-      prg="$out/bin/notmuch"
-      target="libnotmuch.3.dylib"
-      echo "$prg: fixing link to $target"
-      install_name_tool -change "$target" "$out/lib/$target" "$prg"
-    ''
-  else
-    "";
+  configureFlags = [ "--zshcompletiondir=$(out)/share/zsh/site-functions" ];
 
-  # XXX: emacs tests broken
-  doCheck = false;
+  # Notmuch doesn't use autoconf and consequently doesn't tag --bindir and
+  # friends
+  setOutputFlags = false;
+  enableParallelBuilding = true;
+  makeFlags = "V=1";
+
+  preCheck = let
+    test-database = fetchurl {
+      url = "https://notmuchmail.org/releases/test-databases/database-v1.tar.xz";
+      sha256 = "1lk91s00y4qy4pjh8638b5lfkgwyl282g1m27srsf7qfn58y16a2";
+    };
+  in ''
+    ln -s ${test-database} test/test-databases/database-v1.tar.xz
+  '';
+  doCheck = !stdenv.hostPlatform.isDarwin && (versionAtLeast gmime.version "3.0");
   checkTarget = "test";
+  checkInputs = [
+    which dtach openssl bash
+    gdb man
+  ];
+
+  installTargets = "install install-man";
+
+  dontGzipMan = true; # already compressed
 
   meta = {
     description = "Mail indexer";
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = with stdenv.lib.maintainers; [ chaoflow garbas ];
-    platforms = stdenv.lib.platforms.gnu;
+    homepage    = https://notmuchmail.org/;
+    license     = licenses.gpl3;
+    maintainers = with maintainers; [ chaoflow flokli garbas the-kenny ];
+    platforms   = platforms.unix;
   };
 }

@@ -1,19 +1,20 @@
-{stdenv, fetchurl, libev, ocaml, findlib, ocaml_lwt, ocaml_react, zed}:
+{ stdenv, fetchurl, libev, buildDunePackage, zed, lwt_log, lwt_react }:
 
-stdenv.mkDerivation rec {
-  version = "1.6";
-  name = "lambda-term-${version}";
+buildDunePackage rec {
+  pname = "lambda-term";
+  version = "1.13";
+
+  minimumOCamlVersion = "4.02";
 
   src = fetchurl {
-    url = https://github.com/diml/lambda-term/archive/1.6.tar.gz;
-    sha256 = "1rhfixdgpylxznf6sa9wr31wb4pjzpfn5mxhxqpbchmpl2afwa09";
+    url = "https://github.com/diml/${pname}/archive/${version}.tar.gz";
+    sha256 = "1hy5ryagqclgdm9lzh1qil5mrynlypv7mn6qm858hdcnmz9zzn0l";
   };
 
-  buildInputs = [ libev ocaml findlib ocaml_lwt ocaml_react ];
+  buildInputs = [ libev ];
+  propagatedBuildInputs = [ zed lwt_log lwt_react ];
 
-  propagatedBuildInputs = [ zed ];
-
-  createFindlibDestdir = true;
+  hasSharedObjects = true;
 
   meta = { description = "Terminal manipulation library for OCaml";
     longDescription = ''
@@ -33,7 +34,6 @@ stdenv.mkDerivation rec {
 
     homepage = https://github.com/diml/lambda-term;
     license = stdenv.lib.licenses.bsd3;
-    platforms = ocaml.meta.platforms;
     maintainers = [
       stdenv.lib.maintainers.gal_bolle
     ];

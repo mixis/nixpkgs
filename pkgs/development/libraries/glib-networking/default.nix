@@ -1,28 +1,40 @@
-{ stdenv, fetchurl, pkgconfig, glib, intltool, gnutls, libproxy
-, gsettings_desktop_schemas }:
+{ stdenv, fetchurl, meson, ninja, pkgconfig, glib, gettext, python3, gnutls, p11-kit, libproxy, gnome3
+, gsettings-desktop-schemas }:
 
 let
-  ver_maj = "2.40";
-  ver_min = "1";
+  pname = "glib-networking";
+  version = "2.58.0";
 in
 stdenv.mkDerivation rec {
-  name = "glib-networking-${ver_maj}.${ver_min}";
+  name = "${pname}-${version}";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/glib-networking/${ver_maj}/${name}.tar.xz";
-    sha256 = "9fb3e54d049a480afdb814ff7452e7ab67e5d5f607ade230d7713f19922b5a28";
+    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
+    sha256 = "0s006gs9nsq6mg31spqha1jffzmp6qjh10y27h0fxf1iw1ah5ymx";
   };
 
-  configureFlags = "--with-ca-certificates=/etc/ssl/certs/ca-bundle.crt";
+  outputs = [ "out" "dev" ]; # to deal with propagatedBuildInputs
 
-  preBuild = ''
-    sed -e "s@${glib}/lib/gio/modules@$out/lib/gio/modules@g" -i $(find . -name Makefile)
+  PKG_CONFIG_GIO_2_0_GIOMODULEDIR = "${placeholder "out"}/lib/gio/modules";
+
+  postPatch = ''
+    chmod +x meson_post_install.py # patchShebangs requires executable file
+    patchShebangs meson_post_install.py
   '';
 
-  nativeBuildInputs = [ pkgconfig intltool ];
-  propagatedBuildInputs = [ glib gnutls libproxy gsettings_desktop_schemas ];
+  nativeBuildInputs = [
+    meson ninja pkgconfig gettext
+    python3 # install_script
+  ];
+  propagatedBuildInputs = [ glib gnutls p11-kit libproxy gsettings-desktop-schemas ];
 
   doCheck = false; # tests need to access the certificates (among other things)
+
+  passthru = {
+    updateScript = gnome3.updateScript {
+      packageName = pname;
+    };
+  };
 
   meta = with stdenv.lib; {
     description = "Network-related giomodules for glib";
@@ -30,4 +42,3 @@ stdenv.mkDerivation rec {
     platforms = platforms.unix;
   };
 }
-

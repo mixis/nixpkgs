@@ -1,26 +1,32 @@
-{ fetchurl, stdenv }:
+{ stdenv, fetchFromGitHub, fetchpatch, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name = "numactl-1.0.2";
-  src = fetchurl {
-    url = "ftp://oss.sgi.com/www/projects/libnuma/download/${name}.tar.gz";
-    sha256 = "0hbrrh7a8cradj1xdl3wvyp9afx1hzsk90g2lkwd5pn6bniai31j";
+  name = "numactl-${version}";
+  version = "2.0.12";
+
+  src = fetchFromGitHub {
+    owner = "numactl";
+    repo = "numactl";
+    rev = "v${version}";
+    sha256 = "0crhpxwakp0gvd7wwpbkfd3brnrdf89lkbf03axnbrs0b6kaygg2";
   };
 
-  patchPhase = ''
-    sed -i "Makefile" -es"|^ *prefix *:=.*$|prefix := $out|g"
+  nativeBuildInputs = [ autoreconfHook ];
+
+  postPatch = ''
+    patchShebangs test
   '';
 
-  preInstall = ''
-    # The `install' rule expects this directory to be available.
-    mkdir -p "$out/share/man/man5"
-  '';
+  # You probably shouldn't ever run these! They will reconfigure Linux
+  # NUMA settings, which on my build machine makes the rest of package
+  # building ~5% slower until reboot. Ugh!
+  doCheck = false; # never ever!
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Library and tools for non-uniform memory access (NUMA) machines";
-    license = [ "LGPLv2.1" # library
-                "GPLv2"    # command-line tools
-	      ];
-    homepage = http://oss.sgi.com/projects/libnuma/;
+    homepage = https://github.com/numactl/numactl;
+    license = with licenses; [ gpl2 lgpl21 ]; # libnuma is lgpl21
+    platforms = [ "i686-linux" "x86_64-linux" "aarch64-linux" ];
+    maintainers = with maintainers; [ wkennington ];
   };
 }

@@ -1,32 +1,40 @@
-{ stdenv, fetchurl, gfortran, openblas }:
+{ stdenv, fetchurl, autoconf, automake, gettext, libtool
+, gfortran, openblas }:
 
-let version = "3.1.5";
+with stdenv.lib;
+
+let
+  version = "3.6.3";
 in
 stdenv.mkDerivation {
   name = "arpack-${version}";
+
   src = fetchurl {
-    url = "http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng_${version}.tar.gz";
-    sha256 = "05fmg4m0yri47rzgsl2mnr1qbzrs7qyd557p3v9wwxxw0rwcwsd2";
+    url = "https://github.com/opencollab/arpack-ng/archive/${version}.tar.gz";
+    sha256 = "0lzlcsrjsi36pv5bnipwjnyg2fx3nrv31bw2klwrg11gb8g5bwv4";
   };
 
-  buildInputs = [ gfortran ];
-  propagatedBuildInputs = [ openblas ];
+  nativeBuildInputs = [ autoconf automake gettext libtool ];
+  buildInputs = [ gfortran openblas ];
+
+  doCheck = true;
+
+  BLAS_LIBS = "-L${openblas}/lib -lopenblas";
+
+  INTERFACE64 = optional openblas.blas64 "1";
 
   preConfigure = ''
-    substituteInPlace arpack.pc.in \
-      --replace "@BLAS_LIBS@" "-L${openblas}/lib @BLAS_LIBS@"
+    ./bootstrap
   '';
 
-  # Auto-detection fails because gfortran brings in BLAS by default
-  configureFlags="--with-blas=-lopenblas --with-lapack=-lopenblas";
-
   meta = {
-    homepage = "http://forge.scilab.org/index.php/p/arpack-ng/";
-    description = "A collection of Fortran77 subroutines to solve large scale eigenvalue problems";
-    # Looks like OpenBLAS is not that easy to build
-    # there is a sgemm_itcopy undefined reference on 32-bit, for example
-    platforms = ["x86_64-linux"];
+    homepage = https://github.com/opencollab/arpack-ng;
+    description = ''
+      A collection of Fortran77 subroutines to solve large scale eigenvalue
+      problems.
+    '';
     license = stdenv.lib.licenses.bsd3;
     maintainers = [ stdenv.lib.maintainers.ttuegel ];
+    platforms = stdenv.lib.platforms.unix;
   };
 }

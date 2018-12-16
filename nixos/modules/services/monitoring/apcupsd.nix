@@ -38,8 +38,8 @@ let
   ];
 
   shellCmdsForEventScript = eventname: commands: ''
-    echo "#!${pkgs.stdenv.shell}" > "$out/${eventname}"
-    echo "${commands}" >> "$out/${eventname}"
+    echo "#!${pkgs.runtimeShell}" > "$out/${eventname}"
+    echo '${commands}' >> "$out/${eventname}"
     chmod a+x "$out/${eventname}"
   '';
 
@@ -74,7 +74,7 @@ in
 
       enable = mkOption {
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
         description = ''
           Whether to enable the APC UPS daemon. apcupsd monitors your UPS and
           permits orderly shutdown of your computer in the event of a power
@@ -180,7 +180,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         ExecStart = "${pkgs.apcupsd}/bin/apcupsd --killpower -f ${configFile}";
-        TimeoutSec = 0;
+        TimeoutSec = "infinity";
         StandardOutput = "tty";
         RemainAfterExit = "yes";
       };

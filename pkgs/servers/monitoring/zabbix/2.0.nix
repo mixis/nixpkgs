@@ -1,24 +1,24 @@
-{ stdenv, fetchurl, pkgconfig, postgresql, curl, openssl, zlib, gettext
+{ stdenv, fetchurl, pkgconfig, postgresql, curl, openssl, zlib
 , enableJabber ? false, minmay ? null }:
 
 assert enableJabber -> minmay != null;
 
 let
 
-  version = "2.0.11";
+  version = "2.0.21";
   branch = "2.0";
 
   src = fetchurl {
     url = "mirror://sourceforge/zabbix/zabbix-${version}.tar.gz";
-    sha256 = "1vqxlqwhnz02wrca08vrqbq8k19qp84hbdplmqk7d9699njim46i";
+    sha256 = "14g22x2zy5xqnh2xg23xy5gjd49d1i8pks7pkidwdwa9acwgfx71";
   };
 
   preConfigure =
     ''
       substituteInPlace ./configure \
         --replace " -static" "" \
-        ${stdenv.lib.optionalString (stdenv.gcc.libc != null) ''
-          --replace /usr/include/iconv.h ${stdenv.gcc.libc}/include/iconv.h
+        ${stdenv.lib.optionalString (stdenv.cc.libc != null) ''
+          --replace /usr/include/iconv.h ${stdenv.lib.getDev stdenv.cc.libc}/include/iconv.h
         ''}
     '';
 
@@ -48,7 +48,8 @@ in
         -e 's/iks/mmay/g' -e 's/IKS/MMAY/g' src/libs/zbxmedia/jabber.c
     '';
 
-    buildInputs = [ pkgconfig postgresql curl openssl zlib ];
+  nativeBuildInputs = [ pkgconfig ];
+    buildInputs = [ postgresql curl openssl zlib ];
 
     postInstall =
       ''
@@ -64,7 +65,7 @@ in
     meta = {
       inherit branch;
       description = "An enterprise-class open source distributed monitoring solution";
-      homepage = http://www.zabbix.com/;
+      homepage = https://www.zabbix.com/;
       license = "GPL";
       maintainers = [ stdenv.lib.maintainers.eelco ];
       platforms = stdenv.lib.platforms.linux;
@@ -76,15 +77,15 @@ in
 
     inherit src preConfigure;
 
-    configureFlags = "--enable-agent";
+    configureFlags = [ "--enable-agent" ];
 
-    meta = {
+    meta = with stdenv.lib; {
       inherit branch;
       description = "An enterprise-class open source distributed monitoring solution (client-side agent)";
-      homepage = http://www.zabbix.com/;
-      license = "GPL";
-      maintainers = [ stdenv.lib.maintainers.eelco ];
-      platforms = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin;
+      homepage = https://www.zabbix.com/;
+      license = licenses.gpl2;
+      maintainers = [ maintainers.eelco ];
+      platforms = platforms.linux;
     };
   };
 

@@ -1,24 +1,20 @@
-{stdenv, fetchurl, unzip }:
+{ stdenv, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "fira-3.111";
+fetchzip rec {
+  name = "fira-4.106";
 
-  src = fetchurl {
-    url = "http://www.carrois.com/wordpress/downloads/fira_3_1/FiraFonts3111.zip";
-    sha256 = "3ced3df236b0b0eec1b390885c53ac02f3e3f830e9449414230717334a0b2457";
-  };
+  url = https://github.com/mozilla/Fira/archive/4.106.zip;
 
-  buildInputs = [unzip];
-  phases = [ "unpackPhase" "installPhase" ];
-
-  installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    find . -name "*.otf" -exec cp -v {} $out/share/fonts/opentype \;
+  postFetch = ''
+    mkdir -p $out/share/fonts
+    unzip -j $downloadedFile Fira-4.106/otf/FiraSans\*.otf -d $out/share/fonts/opentype
   '';
 
+  sha256 = "0c97nmihcq0ki7ywj8zn048a2bgrszc61lb9p0djfi65ar52jab4";
+
   meta = with stdenv.lib; {
-    homepage = http://www.carrois.com/fira-3-1/;
-    description = "Sans-serif and monospace font for Firefox OS";
+    homepage = https://mozilla.github.io/Fira/;
+    description = "Sans-serif font for Firefox OS";
     longDescription = ''
       Fira Sans is a sans-serif font designed by Erik Spiekermann,
       Ralph du Carrois, Anja Meiners and Botio Nikoltchev of Carrois
@@ -26,9 +22,7 @@ stdenv.mkDerivation rec {
       Spiekermann's FF Meta typeface.  Available in Two, Four, Eight,
       Hair, Thin, Ultra Light, Extra Light, Light, Book, Regular,
       Medium, Semi Bold, Bold, Extra Bold, Heavy weights with
-      corresponding italic versions.  Fira Mono is a matching
-      monospace variant of Fira Sans.  It is available in regular, and
-      bold weights.
+      corresponding italic versions.
     '';
     license = licenses.ofl;
     platforms = platforms.all;

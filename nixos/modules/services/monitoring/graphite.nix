@@ -4,13 +4,26 @@ with lib;
 
 let
   cfg = config.services.graphite;
-  writeTextOrNull = f: t: if t == null then null else pkgs.writeTextDir f t;
+  writeTextOrNull = f: t: mapNullable (pkgs.writeTextDir f) t;
 
   dataDir = cfg.dataDir;
+  staticDir = cfg.dataDir + "/static";
+
+  graphiteLocalSettingsDir = pkgs.runCommand "graphite_local_settings"
+    {inherit graphiteLocalSettings;} ''
+    mkdir -p $out
+    ln -s $graphiteLocalSettings $out/graphite_local_settings.py
+  '';
+
+  graphiteLocalSettings = pkgs.writeText "graphite_local_settings.py" (
+    "STATIC_ROOT = '${staticDir}'\n" +
+    optionalString (! isNull config.time.timeZone) "TIME_ZONE = '${config.time.timeZone}'\n"
+    + cfg.web.extraConfig
+  );
 
   graphiteApiConfig = pkgs.writeText "graphite-api.yaml" ''
-    time_zone: ${config.time.timeZone}
     search_index: ${dataDir}/index
+    ${optionalString (!isNull config.time.timeZone) ''time_zone: ${config.time.timeZone}''}
     ${optionalString (cfg.api.finders != []) ''finders:''}
     ${concatMapStringsSep "\n" (f: "  - " + f.moduleName) cfg.api.finders}
     ${optionalString (cfg.api.functions != []) ''functions:''}
@@ -41,10 +54,17 @@ let
   };
 
   carbonOpts = name: with config.ids; ''
-    --nodaemon --syslog --prefix=${name} --pidfile ${dataDir}/${name}.pid ${name}
+    --nodaemon --syslog --prefix=${name} --pidfile /run/${name}/${name}.pid ${name}
   '';
+
   carbonEnv = {
-    PYTHONPATH = "${pkgs.python27Packages.carbon}/lib/python2.7/site-packages";
+    PYTHONPATH = let
+      cenv = pkgs.python.buildEnv.override {
+        extraLibs = [ pkgs.python27Packages.carbon ];
+      };
+      cenvPack =  "${cenv}/${pkgs.python.sitePackages}";
+    # opt/graphite/lib contains twisted.plugins.carbon-cache
+    in "${cenvPack}/opt/graphite/lib:${cenvPack}";
     GRAPHITE_ROOT = dataDir;
     GRAPHITE_CONF_DIR = configDir;
     GRAPHITE_STORAGE_DIR = dataDir;
@@ -67,10 +87,10 @@ in {
       enable = mkOption {
         description = "Whether to enable graphite web frontend.";
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
       };
 
-      host = mkOption {
+      listenAddress = mkOption {
         description = "Graphite web frontend listen address.";
         default = "127.0.0.1";
         type = types.str;
@@ -80,6 +100,15 @@ in {
         description = "Graphite web frontend port.";
         default = 8080;
         type = types.int;
+      };
+
+      extraConfig = mkOption {
+        type = types.str;
+        default = "";
+        description = ''
+          Graphite webapp settings. See:
+          <link xlink:href="http://graphite.readthedocs.io/en/latest/config-local-settings.html"/>
+        '';
       };
     };
 
@@ -95,13 +124,13 @@ in {
           <link xlink:href="http://graphite-api.readthedocs.org/en/latest/"/>
         '';
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
       };
 
       finders = mkOption {
         description = "List of finder plugins to load.";
         default = [];
-        example = [ pkgs.python27Packages.graphite_influxdb ];
+        example = literalExample "[ pkgs.python27Packages.influxgraph ]";
         type = types.listOf types.package;
       };
 
@@ -114,7 +143,7 @@ in {
         type = types.listOf types.str;
       };
 
-      host = mkOption {
+      listenAddress = mkOption {
         description = "Graphite web service listen address.";
         default = "127.0.0.1";
         type = types.str;
@@ -129,6 +158,7 @@ in {
       package = mkOption {
         description = "Package to use for graphite api.";
         default = pkgs.python27Packages.graphite_api;
+        defaultText = "pkgs.python27Packages.graphite_api";
         type = types.package;
       };
 
@@ -139,7 +169,7 @@ in {
             directories:
                 - ${dataDir}/whisper
         '';
-        example = literalExample ''
+        example = ''
           allowed_origins:
             - dashboard.example.com
           cheat_times: true
@@ -153,7 +183,7 @@ in {
             CACHE_TYPE: 'filesystem'
             CACHE_DIR: '/tmp/graphite-api-cache'
         '';
-        type = types.str;
+        type = types.lines;
       };
     };
 
@@ -177,7 +207,7 @@ in {
       enableCache = mkOption {
         description = "Whether to enable carbon cache, the graphite storage daemon.";
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
       };
 
       storageAggregation = mkOption {
@@ -234,7 +264,7 @@ in {
       enableRelay = mkOption {
         description = "Whether to enable carbon relay, the carbon replication and sharding service.";
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
       };
 
       relayRules = mkOption {
@@ -249,13 +279,13 @@ in {
       };
 
       enableAggregator = mkOption {
-        description = "Whether to enable carbon agregator, the carbon buffering service.";
+        description = "Whether to enable carbon aggregator, the carbon buffering service.";
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
       };
 
       aggregationRules = mkOption {
-        description = "Defines if and how received metrics will be agregated.";
+        description = "Defines if and how received metrics will be aggregated.";
         default = null;
         type = types.uniq (types.nullOr types.string);
         example = ''
@@ -269,7 +299,7 @@ in {
       enable = mkOption {
         description = "Whether to enable seyren service.";
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
       };
 
       port = mkOption {
@@ -285,7 +315,7 @@ in {
       };
 
       graphiteUrl = mkOption {
-        default = "http://${cfg.web.host}:${toString cfg.web.port}";
+        default = "http://${cfg.web.listenAddress}:${toString cfg.web.port}";
         description = "Host where graphite service runs.";
         type = types.str;
       };
@@ -306,7 +336,7 @@ in {
         example = literalExample ''
           {
             GRAPHITE_USERNAME = "user";
-            GRAPHITE_PASSWORD = "pass"; 
+            GRAPHITE_PASSWORD = "pass";
           }
         '';
       };
@@ -319,7 +349,7 @@ in {
           <link xlink:href="https://github.com/seatgeek/graphite-pager"/>
         '';
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
       };
 
       redisUrl = mkOption {
@@ -330,7 +360,7 @@ in {
 
       graphiteUrl = mkOption {
         description = "URL to your graphite service.";
-        default = "http://${cfg.web.host}:${toString cfg.web.port}";
+        default = "http://${cfg.web.listenAddress}:${toString cfg.web.port}";
         type = types.str;
       };
 
@@ -343,8 +373,8 @@ in {
               critical: 200
               name: Test
         '';
-        example = literalExample ''
-          pushbullet_key: pushbullet_api_key 
+        example = ''
+          pushbullet_key: pushbullet_api_key
           alerts:
             - target: stats.seatgeek.app.deal_quality.venue_info_cache.hit
               warning: .5
@@ -354,56 +384,71 @@ in {
         type = types.lines;
       };
     };
+
+    beacon = {
+      enable = mkEnableOption "graphite beacon";
+
+      config = mkOption {
+        description = "Graphite beacon configuration.";
+        default = {};
+        type = types.attrs;
+      };
+    };
   };
 
   ###### implementation
 
   config = mkMerge [
     (mkIf cfg.carbon.enableCache {
-      systemd.services.carbonCache = {
+      systemd.services.carbonCache = let name = "carbon-cache"; in {
         description = "Graphite Data Storage Backend";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-interfaces.target" ];
+        after = [ "network.target" ];
         environment = carbonEnv;
         serviceConfig = {
-          ExecStart = "${pkgs.twisted}/bin/twistd ${carbonOpts "carbon-cache"}";
+          RuntimeDirectory = name;
+          ExecStart = "${pkgs.pythonPackages.twisted}/bin/twistd ${carbonOpts name}";
           User = "graphite";
           Group = "graphite";
           PermissionsStartOnly = true;
+          PIDFile="/run/${name}/${name}.pid";
         };
         preStart = ''
-          mkdir -p ${cfg.dataDir}/whisper
-          chmod 0700 ${cfg.dataDir}/whisper
-          chown -R graphite:graphite ${cfg.dataDir}
+          install -dm0700 -o graphite -g graphite ${cfg.dataDir}
+          install -dm0700 -o graphite -g graphite ${cfg.dataDir}/whisper
         '';
       };
     })
 
     (mkIf cfg.carbon.enableAggregator {
-      systemd.services.carbonAggregator = {
+      systemd.services.carbonAggregator = let name = "carbon-aggregator"; in {
         enable = cfg.carbon.enableAggregator;
         description = "Carbon Data Aggregator";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-interfaces.target" ];
+        after = [ "network.target" ];
         environment = carbonEnv;
         serviceConfig = {
-          ExecStart = "${pkgs.twisted}/bin/twistd ${carbonOpts "carbon-aggregator"}";
+          RuntimeDirectory = name;
+          ExecStart = "${pkgs.pythonPackages.twisted}/bin/twistd ${carbonOpts name}";
           User = "graphite";
           Group = "graphite";
+          PIDFile="/run/${name}/${name}.pid";
         };
       };
     })
 
     (mkIf cfg.carbon.enableRelay {
-      systemd.services.carbonRelay = {
+      systemd.services.carbonRelay = let name = "carbon-relay"; in {
         description = "Carbon Data Relay";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-interfaces.target" ];
+        after = [ "network.target" ];
         environment = carbonEnv;
         serviceConfig = {
-          ExecStart = "${pkgs.twisted}/bin/twistd ${carbonOpts "carbon-relay"}";
+          RuntimeDirectory = name;
+          ExecStart = "${pkgs.pythonPackages.twisted}/bin/twistd ${carbonOpts name}";
           User = "graphite";
           Group = "graphite";
+          PIDFile="/run/${name}/${name}.pid";
         };
       };
     })
@@ -414,23 +459,46 @@ in {
       ];
     })
 
-    (mkIf cfg.web.enable {
+    (mkIf cfg.web.enable (let
+      python27' = pkgs.python27.override {
+        packageOverrides = self: super: {
+          django = self.django_1_8;
+          django_tagging = self.django_tagging_0_4_3;
+        };
+      };
+      pythonPackages = python27'.pkgs;
+    in {
       systemd.services.graphiteWeb = {
         description = "Graphite Web Interface";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-interfaces.target" ];
+        after = [ "network.target" ];
         path = [ pkgs.perl ];
         environment = {
-          PYTHONPATH = "${pkgs.python27Packages.graphite_web}/lib/python2.7/site-packages";
+          PYTHONPATH = let
+              penv = pkgs.python.buildEnv.override {
+                extraLibs = [
+                  pythonPackages.graphite-web
+                  pythonPackages.pysqlite
+                ];
+              };
+              penvPack = "${penv}/${pkgs.python.sitePackages}";
+            in concatStringsSep ":" [
+                 "${graphiteLocalSettingsDir}"
+                 "${penvPack}/opt/graphite/webapp"
+                 "${penvPack}"
+                 # explicitly adding pycairo in path because it cannot be imported via buildEnv
+                 "${pkgs.pythonPackages.pycairo}/${pkgs.python.sitePackages}"
+               ];
           DJANGO_SETTINGS_MODULE = "graphite.settings";
           GRAPHITE_CONF_DIR = configDir;
           GRAPHITE_STORAGE_DIR = dataDir;
+          LD_LIBRARY_PATH = "${pkgs.cairo.out}/lib";
         };
         serviceConfig = {
           ExecStart = ''
-            ${pkgs.python27Packages.waitress}/bin/waitress-serve \
-            --host=${cfg.web.host} --port=${toString cfg.web.port} \
-            --call django.core.handlers.wsgi:WSGIHandler'';
+            ${pkgs.python27Packages.waitress-django}/bin/waitress-serve-django \
+              --host=${cfg.web.listenAddress} --port=${toString cfg.web.port}
+          '';
           User = "graphite";
           Group = "graphite";
           PermissionsStartOnly = true;
@@ -440,39 +508,45 @@ in {
             mkdir -p ${dataDir}/{whisper/,log/webapp/}
             chmod 0700 ${dataDir}/{whisper/,log/webapp/}
 
-            # populate database
-            ${pkgs.python27Packages.graphite_web}/bin/manage-graphite.py syncdb --noinput
+            ${pkgs.pythonPackages.django_1_8}/bin/django-admin.py migrate --noinput
 
-            # create index
-            ${pkgs.python27Packages.graphite_web}/bin/build-index.sh
+            chown -R graphite:graphite ${dataDir}
 
             touch ${dataDir}/db-created
+          fi
 
-            chown -R graphite:graphite ${cfg.dataDir}
+          # Only collect static files when graphite_web changes.
+          if ! [ "${dataDir}/current_graphite_web" -ef "${pythonPackages.graphite-web}" ]; then
+            mkdir -p ${staticDir}
+            ${pkgs.pythonPackages.django_1_8}/bin/django-admin.py collectstatic  --noinput --clear
+            chown -R graphite:graphite ${staticDir}
+            ln -sfT "${pythonPackages.graphite-web}" "${dataDir}/current_graphite_web"
           fi
         '';
       };
 
-      environment.systemPackages = [ pkgs.python27Packages.graphite_web ];
-    })
+      environment.systemPackages = [ pythonPackages.graphite-web ];
+    }))
 
-    (mkIf cfg.api.enable { 
+    (mkIf cfg.api.enable {
       systemd.services.graphiteApi = {
         description = "Graphite Api Interface";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-interfaces.target" ];
+        after = [ "network.target" ];
         environment = {
-          PYTHONPATH =
-            "${cfg.api.package}/lib/python2.7/site-packages:" +
-            concatMapStringsSep ":" (f: f + "/lib/python2.7/site-packages") cfg.api.finders;
+          PYTHONPATH = let
+              aenv = pkgs.python.buildEnv.override {
+                extraLibs = [ cfg.api.package pkgs.cairo pkgs.pythonPackages.cffi ] ++ cfg.api.finders;
+              };
+            in "${aenv}/${pkgs.python.sitePackages}";
           GRAPHITE_API_CONFIG = graphiteApiConfig;
-          LD_LIBRARY_PATH = "${pkgs.cairo}/lib";
+          LD_LIBRARY_PATH = "${pkgs.cairo.out}/lib";
         };
         serviceConfig = {
           ExecStart = ''
             ${pkgs.python27Packages.waitress}/bin/waitress-serve \
-            --host=${cfg.api.host} --port=${toString cfg.api.port} \
-            graphite_api.app:app 
+            --host=${cfg.api.listenAddress} --port=${toString cfg.api.port} \
+            graphite_api.app:app
           '';
           User = "graphite";
           Group = "graphite";
@@ -483,9 +557,10 @@ in {
             mkdir -p ${dataDir}/cache/
             chmod 0700 ${dataDir}/cache/
 
-            touch ${dataDir}/db-created
+            chown graphite:graphite ${cfg.dataDir}
+            chown -R graphite:graphite ${cfg.dataDir}/cache
 
-            chown -R graphite:graphite ${cfg.dataDir}
+            touch ${dataDir}/db-created
           fi
         '';
       };
@@ -495,18 +570,18 @@ in {
       systemd.services.seyren = {
         description = "Graphite Alerting Dashboard";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-interfaces.target" "mongodb.service" ];
+        after = [ "network.target" "mongodb.service" ];
         environment = seyrenConfig;
         serviceConfig = {
           ExecStart = "${pkgs.seyren}/bin/seyren -httpPort ${toString cfg.seyren.port}";
           WorkingDirectory = dataDir;
           User = "graphite";
-          Group = "graphite"; 
+          Group = "graphite";
         };
         preStart = ''
           if ! test -e ${dataDir}/db-created; then
             mkdir -p ${dataDir}
-            chown -R graphite:graphite ${dataDir}
+            chown graphite:graphite ${dataDir}
           fi
         '';
       };
@@ -518,31 +593,50 @@ in {
       systemd.services.graphitePager = {
         description = "Graphite Pager Alerting Daemon";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-interfaces.target" "redis.service" ];
+        after = [ "network.target" "redis.service" ];
         environment = {
           REDIS_URL = cfg.pager.redisUrl;
           GRAPHITE_URL = cfg.pager.graphiteUrl;
         };
         serviceConfig = {
-          ExecStart = "${pkgs.pythonPackages.graphite_pager}/bin/graphite-pager --config ${pagerConfig}";
+          ExecStart = "${pkgs.pythonPackages.graphitepager}/bin/graphite-pager --config ${pagerConfig}";
           User = "graphite";
-          Group = "graphite"; 
+          Group = "graphite";
         };
       };
 
       services.redis.enable = mkDefault true;
 
-      environment.systemPackages = [ pkgs.pythonPackages.graphite_pager ];
+      environment.systemPackages = [ pkgs.pythonPackages.graphitepager ];
     })
 
-    {
-      users.extraUsers = singleton {
+    (mkIf cfg.beacon.enable {
+      systemd.services.graphite-beacon = {
+        description = "Grpahite Beacon Alerting Daemon";
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig = {
+          ExecStart = ''
+            ${pkgs.pythonPackages.graphite_beacon}/bin/graphite-beacon \
+              --config=${pkgs.writeText "graphite-beacon.json" (builtins.toJSON cfg.beacon.config)}
+          '';
+          User = "graphite";
+          Group = "graphite";
+        };
+      };
+    })
+
+    (mkIf (
+      cfg.carbon.enableCache || cfg.carbon.enableAggregator || cfg.carbon.enableRelay ||
+      cfg.web.enable || cfg.api.enable ||
+      cfg.seyren.enable || cfg.pager.enable || cfg.beacon.enable
+     ) {
+      users.users = singleton {
         name = "graphite";
         uid = config.ids.uids.graphite;
         description = "Graphite daemon user";
         home = dataDir;
       };
-      users.extraGroups.graphite.gid = config.ids.gids.graphite;
-    }
+      users.groups.graphite.gid = config.ids.gids.graphite;
+    })
   ];
 }

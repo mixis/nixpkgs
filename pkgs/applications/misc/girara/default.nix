@@ -1,30 +1,28 @@
-{ stdenv, fetchurl, pkgconfig, gtk, gettext, ncurses }:
+{ stdenv, fetchurl, meson, ninja, pkgconfig, glib, gtk, gettext, libiconv, libintl
+}:
 
 stdenv.mkDerivation rec {
-  name = "girara-0.2.3";
+  name = "girara-${version}";
+  version = "0.3.1";
 
   src = fetchurl {
-    url = "http://pwmt.org/projects/girara/download/${name}.tar.gz";
-    sha256 = "1phfmqp8y17zcy9yi6pm2f80x8ldbk60iswpm4bmjz5217jwqzxh";
+    url = "https://pwmt.org/projects/girara/download/${name}.tar.xz";
+    sha256 = "1ddwap5q5cnfdr1q1b110wy7mw1z3khn86k01jl8lqmn02n9nh1w";
   };
 
-  buildInputs = [ pkgconfig gtk gettext ];
+  nativeBuildInputs = [ meson ninja pkgconfig gettext ];
+  buildInputs = [ libintl libiconv ];
+  propagatedBuildInputs = [ glib gtk ];
 
-  makeFlags = [
-    "PREFIX=$(out)"
-    "TPUT=${ncurses}/bin/tput"
-  ];
-
-  meta = {
-    homepage = http://pwmt.org/projects/girara/;
+  meta = with stdenv.lib; {
+    homepage = https://pwmt.org/projects/girara/;
     description = "User interface library";
     longDescription = ''
       girara is a library that implements a GTK+ based VIM-like user interface
       that focuses on simplicity and minimalism.
     '';
-    license = stdenv.lib.licenses.zlib;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.garbas ];
+    license = licenses.zlib;
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = [ maintainers.garbas ];
   };
 }
-

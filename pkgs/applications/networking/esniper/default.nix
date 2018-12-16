@@ -1,30 +1,30 @@
 { stdenv, fetchurl, openssl, curl, coreutils, gawk, bash, which }:
 
-stdenv.mkDerivation {
-  name = "esniper-2.31.0";
+stdenv.mkDerivation rec {
+  name = "esniper-2.35.0";
 
-  src = fetchurl {
-    url    = "mirror://sourceforge/esniper/esniper-2-31-0.tgz";
-    sha256 = "0xn6gdyr0c18khwcsi2brp49wkancrsrxxca7hvbawhbf263glih";
-  };
+   src = fetchurl {
+     url    = "mirror://sourceforge/esniper/${stdenv.lib.replaceStrings ["."] ["-"] name}.tgz";
+     sha256 = "04iwjb42lw90c03125bjdpnm0fp78dmwf2j35r7mah0nwcrlagd9";
+   };
 
   buildInputs = [ openssl curl ];
 
   # Add support for CURL_CA_BUNDLE variable.
-  # Fix <http://sourceforge.net/p/esniper/bugs/648/>.
+  # Fix <https://sourceforge.net/p/esniper/bugs/648/>.
   patches = [ ./find-ca-bundle.patch ];
 
   postInstall = ''
     sed <"frontends/snipe" >"$out/bin/snipe" \
-      -e "2i export PATH=\"$out/bin:${coreutils}/bin:${gawk}/bin:${bash}/bin:${which}/bin:\$PATH\""
+      -e "2i export PATH=\"$out/bin:${stdenv.lib.makeBinPath [ coreutils gawk bash which ]}:\$PATH\""
     chmod 555 "$out/bin/snipe"
   '';
 
   meta = with stdenv.lib; {
     description = "Simple, lightweight tool for sniping eBay auctions";
-    homepage    = http://esnipe.rsourceforge.net;
+    homepage    = http://esniper.sourceforge.net;
     license     = licenses.gpl2;
-    maintainers = with maintainers; [ lovek323 simons ];
+    maintainers = with maintainers; [ lovek323 peti ];
     platforms   = platforms.all;
   };
 }

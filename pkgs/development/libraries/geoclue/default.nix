@@ -1,55 +1,58 @@
-x@{builderDefsPackage
-  , dbus, dbus_glib, glib, pkgconfig, libxml2, gnome, libxslt
-  , ...}:
-builderDefsPackage
-(a :  
-let 
-  helperArgNames = ["stdenv" "fetchurl" "builderDefsPackage"] ++ 
-    ["gnome"];
+{ stdenv, fetchFromGitLab, intltool, meson, ninja, pkgconfig, gtk-doc, docbook_xsl, docbook_xml_dtd_412, glib, json-glib, libsoup, libnotify, gdk_pixbuf
+, modemmanager, avahi, glib-networking, python3, wrapGAppsHook, gobject-introspection, vala
+, withDemoAgent ? false
+}:
 
-  buildInputs = map (n: builtins.getAttr n x)
-    (builtins.attrNames (builtins.removeAttrs x helperArgNames))
-    ++ [gnome.GConf];
-  sourceInfo = rec {
-    baseName="geoclue";
-    version="0.12.0";
-    name="${baseName}-${version}";
-    url="https://launchpad.net/geoclue/trunk/0.12/+download/${name}.tar.gz";
-    hash="15j619kvmdgj2hpma92mkxbzjvgn8147a7500zl3bap9g8bkylqg";
-  };
-in
-rec {
-  src = a.fetchurl {
-    url = sourceInfo.url;
-    sha256 = sourceInfo.hash;
+with stdenv.lib;
+
+stdenv.mkDerivation rec {
+  name = "geoclue-${version}";
+  version = "2.5.1";
+
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "geoclue";
+    repo = "geoclue";
+    rev = version;
+    sha256 = "0vww6irijw5ss7vawkdi5z5wdpcgw4iqljn5vs3vbd4y3d0lzrbs";
   };
 
-  inherit (sourceInfo) name version;
-  inherit buildInputs;
+  outputs = [ "out" "dev" "devdoc" ];
 
-  propagatedBuildInputs = [a.dbus a.glib a.dbus_glib];
+  nativeBuildInputs = [
+    pkgconfig intltool meson ninja wrapGAppsHook python3 vala gobject-introspection
+    # devdoc
+    gtk-doc docbook_xsl docbook_xml_dtd_412
+  ];
 
-  /* doConfigure should be removed if not needed */
-  phaseNames = ["fixConfigure" "doConfigure" "doMakeInstall"];
-      
-  fixConfigure = a.fullDepEntry ''
-    sed -e 's@-Werror@@' -i configure
-  '' ["minInit" "doUnpack"];
+  buildInputs = [
+    glib json-glib libsoup avahi
+  ] ++ optionals withDemoAgent [
+    libnotify gdk_pixbuf
+  ] ++ optionals (!stdenv.isDarwin) [ modemmanager ];
 
-  meta = {
+  propagatedBuildInputs = [ glib glib-networking ];
+
+  mesonFlags = [
+    "-Dsystemd-system-unit-dir=${placeholder "out"}/etc/systemd/system"
+    "-Ddemo-agent=${if withDemoAgent then "true" else "false"}"
+  ] ++ optionals stdenv.isDarwin [
+    "-D3g-source=false"
+    "-Dcdma-source=false"
+    "-Dmodem-gps-source=false"
+    "-Dnmea-source=false"
+  ];
+
+  postPatch = ''
+    chmod +x demo/install-file.py
+    patchShebangs demo/install-file.py
+  '';
+
+  meta = with stdenv.lib; {
     description = "Geolocation framework and some data providers";
-    maintainers = with a.lib.maintainers;
-    [
-      raskin
-    ];
-    platforms = with a.lib.platforms;
-      linux;
-    license = a.lib.licenses.lgpl2;
+    homepage = https://gitlab.freedesktop.org/geoclue/geoclue/wikis/home;
+    maintainers = with maintainers; [ raskin garbas ];
+    platforms = with platforms; linux ++ darwin;
+    license = licenses.lgpl2;
   };
-  passthru = {
-    updateInfo = {
-      downloadPage = "http://folks.o-hand.com/jku/geoclue-releases/";
-    };
-  };
-}) x
-
+}

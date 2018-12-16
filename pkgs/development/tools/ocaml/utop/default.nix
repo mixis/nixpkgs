@@ -1,33 +1,64 @@
-{stdenv, fetchurl, ocaml, findlib, lambdaTerm, ocaml_lwt, makeWrapper,
- ocaml_react, camomile, zed
+{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, dune
+, lambdaTerm, cppo, makeWrapper
 }:
 
+if !stdenv.lib.versionAtLeast ocaml.version "4.02"
+then throw "utop is not available for OCaml ${ocaml.version}"
+else
+
 stdenv.mkDerivation rec {
-  version = "1.15";
+  version = "2.2.0";
   name = "utop-${version}";
 
   src = fetchurl {
-    url = https://github.com/diml/utop/archive/1.15.tar.gz;
-    sha256 = "106v0x6sa2x10zgmjf73mpzws7xiqanxswivd00iqnpc0bcpkmrr";
+    url = "https://github.com/diml/utop/archive/${version}.tar.gz";
+    sha256 = "1414snwmqaxs1x8wbpjf6fn3jsl01hq0phrr7639xmb5vh15mgd4";
   };
 
-  buildInputs = [ ocaml findlib makeWrapper];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ ocaml findlib ocamlbuild cppo dune ];
 
-  propagatedBuildInputs = [ lambdaTerm ocaml_lwt ];
+  propagatedBuildInputs = [ lambdaTerm ];
 
-  createFindlibDestdir = true;
-
-  buildPhase = ''
-    make
-    make doc
-    '';
+  inherit (dune) installPhase;
 
   postFixup =
-  let ocamlVersion = (builtins.parseDrvName (ocaml.name)).version;
-  in
-   ''
-    wrapProgram "$out"/bin/utop --set CAML_LD_LIBRARY_PATH "${ocaml_lwt}"/lib/ocaml/${ocamlVersion}/site-lib/lwt/:"${lambdaTerm}"/lib/ocaml/${ocamlVersion}/site-lib/lambda-term/:'$CAML_LD_LIBRARY_PATH' --set OCAMLPATH "${ocaml_lwt}"/lib/ocaml/${ocamlVersion}/site-lib:${ocaml_react}/lib/ocaml/${ocamlVersion}/site-lib:${camomile}/lib/ocaml/${ocamlVersion}/site-lib:${zed}/lib/ocaml/${ocamlVersion}/site-lib:${lambdaTerm}/lib/ocaml/${ocamlVersion}/site-lib:"$out"/lib/ocaml/${ocamlVersion}/site-lib:'$OCAMLPATH'
-    '';
+   let
+     path = "etc/utop/env";
+
+     # derivation of just runtime deps so env vars created by
+     # setup-hooks can be saved for use at runtime
+     runtime = stdenv.mkDerivation rec {
+       name = "utop-runtime-env-${version}";
+
+       buildInputs = [ findlib ] ++ propagatedBuildInputs;
+
+       phases = [ "installPhase" ];
+
+       installPhase = ''
+         mkdir -p "$out"/${path}
+         for e in OCAMLPATH CAML_LD_LIBRARY_PATH; do
+           printf %s "''${!e}" > "$out"/${path}/$e
+         done
+       '';
+     };
+
+     get = key: ''$(cat "${runtime}/${path}/${key}")'';
+   in ''
+   for prog in "$out"/bin/*
+   do
+
+    # Note: wrapProgram by default calls 'exec -a $0 ...', but this
+    # breaks utop on Linux with OCaml 4.04, and is disabled with
+    # '--argv0 ""' flag. See https://github.com/NixOS/nixpkgs/issues/24496
+    wrapProgram "$prog" \
+      --argv0 "" \
+      --prefix CAML_LD_LIBRARY_PATH ":" "${get "CAML_LD_LIBRARY_PATH"}" \
+      --prefix OCAMLPATH ":" "${get "OCAMLPATH"}" \
+      --prefix OCAMLPATH ":" $(unset OCAMLPATH; addOCamlPath "$out"; printf %s "$OCAMLPATH") \
+      --add-flags "-I ${findlib}/lib/ocaml/${stdenv.lib.getVersion ocaml}/site-lib"
+   done
+   '';
 
   meta = {
     description = "Universal toplevel for OCaml";
@@ -38,7 +69,7 @@ stdenv.mkDerivation rec {
     '';
     homepage = https://github.com/diml/utop;
     license = stdenv.lib.licenses.bsd3;
-    platforms = ocaml.meta.platforms;
+    platforms = ocaml.meta.platforms or [];
     maintainers = [
       stdenv.lib.maintainers.gal_bolle
     ];

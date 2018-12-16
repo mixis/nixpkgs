@@ -1,40 +1,27 @@
-x@{builderDefsPackage
-  , ...}:
-builderDefsPackage
-(a :  
-let 
-  helperArgNames = ["stdenv" "fetchurl" "builderDefsPackage"] ++ 
-    [];
+{ stdenv, fetchzip }:
 
-  buildInputs = map (n: builtins.getAttr n x)
-    (builtins.attrNames (builtins.removeAttrs x helperArgNames));
-  sourceInfo = rec {
-    version = "0.7.0";
-    baseName="cm-unicode";
-    name="${baseName}-${version}";
-    url="mirror://sourceforge/${baseName}/${baseName}/${version}/${name}-otf.tar.xz";
+let
+  version = "0.7.0";
+in fetchzip rec {
+  name = "cm-unicode-${version}";
+
+  url = "mirror://sourceforge/cm-unicode/cm-unicode/${version}/${name}-otf.tar.xz";
+
+  postFetch = ''
+    tar -xJvf $downloadedFile --strip-components=1
+    mkdir -p $out/share/fonts/opentype
+    mkdir -p $out/share/doc/${name}
+    cp -v *.otf $out/share/fonts/opentype/
+    cp -v README FontLog.txt $out/share/doc/${name}
+  '';
+
+  sha256 = "1rzz7yhqq3lljyqxbg46jfzfd09qgpgx865lijr4sgc94riy1ypn";
+
+  meta = with stdenv.lib; {
+    homepage = http://canopus.iacp.dvo.ru/~panov/cm-unicode/;
+    description = "Computer Modern Unicode fonts";
+    maintainers = with maintainers; [ raskin rycee ];
+    license = licenses.ofl;
+    platforms = platforms.all;
   };
-in
-rec {
-  src = a.fetchurl {
-    url = sourceInfo.url;
-    sha256 = "0a0w9qm9g8qz2xh3lr61bj1ymqslqsvk4w2ybc3v2qa89nz7x2jl";
-  };
-
-  inherit (sourceInfo) name version;
-  inherit buildInputs;
-
-  phaseNames = ["doUnpack" "installFonts"];
-
-  meta = {
-    maintainers = with a.lib.maintainers;
-    [
-      raskin
-    ];
-    platforms = with a.lib.platforms;
-      all;
-    downloadPage = "http://sourceforge.net/projects/cm-unicode/files/cm-unicode/";
-    inherit version;
-  };
-}) x
-
+}

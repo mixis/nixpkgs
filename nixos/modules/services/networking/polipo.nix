@@ -42,7 +42,7 @@ in
       };
 
       allowedClients = mkOption {
-        type = types.listOf types.string;
+        type = types.listOf types.str;
         default = [ "127.0.0.1" "::1" ];
         example = [ "127.0.0.1" "::1" "134.157.168.0/24" "2001:660:116::/48" ];
         description = ''
@@ -85,7 +85,7 @@ in
 
   config = mkIf cfg.enable {
 
-    users.extraUsers = singleton
+    users.users = singleton
       { name = "polipo";
         uid = config.ids.uids.polipo;
         description = "Polipo caching proxy user";
@@ -93,7 +93,7 @@ in
         createHome = true;
       };
 
-    users.extraGroups = singleton
+    users.groups = singleton
       { name = "polipo";
         gid = config.ids.gids.polipo;
         members = [ "polipo" ];

@@ -1,34 +1,27 @@
-{ stdenv, fetchFromGitHub, python, osx_sdk }:
+{ stdenv, fetchFromGitHub }:
 
-let
-  sdkVersion = "10.9";
-in stdenv.mkDerivation {
-  name = "PrivateMacOSX${sdkVersion}.sdk";
+stdenv.mkDerivation {
+  name = "OSXPrivateSDK";
 
   src = fetchFromGitHub {
-    owner  = "copumpkin";
-    repo   = "OSXPrivateSDK";
-    rev    = "bde9cba13e6ae62a8e4e0f405008ea719526e7ad";
-    sha256 = "1vj3fxwp32irxjk987p7a223sm5bl5rrlajcvgy69k0wb0fp0krc";
+    owner = "samdmarshall";
+    repo = "OSXPrivateSDK";
+    rev = "f4d52b60e86b496abfaffa119a7d299562d99783";
+    sha256 = "0bv0884yxpvk2ishxj8gdy1w6wb0gwfq55q5qjp0s8z0z7f63zqh";
   };
 
-  buildInputs = [ python ];
-
-  configurePhase = "true";
-
-  buildPhase = ''
-    python PrivateSDK.py -i ${osx_sdk}/Developer/SDKs/MacOSX${sdkVersion}.sdk -o PrivateMacOSX${sdkVersion}.sdk
-  '';
-
+  # NOTE: we install only headers that are really needed to keep closure size
+  # reasonable.
   installPhase = ''
-    mkdir -p $out/Developer/SDKs/
-    mv PrivateMacOSX${sdkVersion}.sdk $out/Developer/SDKs
+    mkdir -p $out/include
+    sdk10=PrivateSDK10.10.sparse.sdk
+    sdk=PrivateSDK10.9.sparse.sdk
+    cp $sdk/usr/local/include/sandbox_private.h $out/include/sandbox_private.h
+    # this can be removed once we dtrace binary
+    cp $sdk/usr/local/include/security_utilities/utilities_dtrace.h $out/include/utilities_dtrace.h
+    cp -RL $sdk/usr/include/xpc $out/include/xpc
+    cp -RL $sdk/usr/local/include/bsm $out/include/bsm
+    cp -RL $sdk/System/Library/Frameworks/Security.framework/Versions/A/PrivateHeaders $out/include/SecurityPrivateHeaders
+    cp -RL $sdk10/System/Library/Frameworks/CoreFoundation.framework/Headers $out/include/CoreFoundationPrivateHeaders
   '';
-
-  meta = with stdenv.lib; {
-    description = "A private Mac OS ${version} SDK, suitable for building many of Apple's open source releases";
-    maintainers = with maintainers; [ copumpkin ];
-    platforms   = platforms.darwin;
-    license     = licenses.unfree;
-  };
 }

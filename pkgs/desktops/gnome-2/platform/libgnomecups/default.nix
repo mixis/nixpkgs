@@ -8,9 +8,12 @@ stdenv.mkDerivation rec {
     sha256 = "0a8xdaxzz2wc0n1fjcav65093gixzyac3948l8cxx1mk884yhc71";
   };
 
-  patches = [ ./glib.patch ];
+  hardeningDisable = [ "format" ];
 
-  buildInputs = [ pkgconfig gtk gettext intltool libart_lgpl ];
+  patches = [ ./glib.patch ./cups_1.6.patch ];
+
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ gtk gettext intltool libart_lgpl ];
 
   propagatedBuildInputs = [ libxml2 ];
 }

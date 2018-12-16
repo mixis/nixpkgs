@@ -1,31 +1,48 @@
-{ stdenv, fetchurl, ocaml, findlib, which, ocsigen_server, ocsigen_deriving,
-  js_of_ocaml, ocaml_react, ocaml_lwt, calendar, cryptokit, tyxml,
-  ocaml_ipaddr, ocamlnet, ocaml_ssl, ocaml_pcre, ocaml_optcomp}:
+{ stdenv, fetchurl, which, ocsigen_server, ocsigen_deriving, ocaml, camlp4,
+  lwt_react, cryptokit,
+  ipaddr, ocamlnet, lwt_ssl, ocaml_pcre,
+  opaline, ppx_tools, ppx_deriving, findlib
+, js_of_ocaml-ocamlbuild, js_of_ocaml-ppx, js_of_ocaml-ppx_deriving_json
+, js_of_ocaml-lwt
+, js_of_ocaml-tyxml
+}:
 
-stdenv.mkDerivation
+assert stdenv.lib.versionAtLeast ocaml.version "4.03";
+
+stdenv.mkDerivation rec
 {
-  name = "eliom-4.0.0";
+  pname = "eliom";
+  version = "6.3.0";
+  name = "${pname}-${version}";
 
   src = fetchurl {
-    url = https://github.com/ocsigen/eliom/archive/4.0.0.tar.gz;
-    sha256 = "1xf2l6lvngxzwaw6lvr6sgi48rz0wxg65q9lz4jzqjarkp0sx206";
+    url = "https://github.com/ocsigen/eliom/archive/${version}.tar.gz";
+    sha256 = "137hgdzv9fwkzf6xdksqy437lrf8xvrycf5jwc3z4cmpsigs6x7v";
   };
 
-  buildInputs = [ocaml which ocsigen_server findlib ocsigen_deriving
-                 js_of_ocaml ocaml_react ocaml_lwt calendar
-                 cryptokit tyxml ocaml_ipaddr ocamlnet ocaml_ssl
-                 ocaml_pcre ocaml_optcomp];
+  patches = [ ./camlp4.patch ];
 
-  preConfigure =
-  ''chmod a+x configure
-    sed s/deriving-ocsigen/deriving/g -i configure
-  '';
+  buildInputs = [ ocaml which findlib js_of_ocaml-ocamlbuild js_of_ocaml-ppx_deriving_json opaline ppx_tools
+    ocsigen_deriving
+  ];
 
-  configureFlags = "--root $(out) --prefix /";
+  propagatedBuildInputs = [
+    camlp4
+    cryptokit
+    ipaddr
+    js_of_ocaml-lwt
+    js_of_ocaml-ppx
+    js_of_ocaml-tyxml
+    lwt_react
+    lwt_ssl
+    ocamlnet ocaml_pcre
+    ocsigen_server
+    ppx_deriving
+  ];
 
-  dontAddPrefix = true;  
+  installPhase = "opaline -prefix $out -libdir $OCAMLFIND_DESTDIR";
 
-  createFindlibDestdir = true;
+  setupHook = [ ./setup-hook.sh ];
 
   meta = {
     homepage = http://ocsigen.org/eliom/;
@@ -42,8 +59,6 @@ stdenv.mkDerivation
     Ocsigen Js_of_ocaml.'';
 
     license = stdenv.lib.licenses.lgpl21;
-
-    platforms = ocaml.meta.platforms;
 
     maintainers = [ stdenv.lib.maintainers.gal_bolle ];
   };

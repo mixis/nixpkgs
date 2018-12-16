@@ -1,23 +1,21 @@
-{stdenv, fetchurl, ocaml, findlib, yojson, menhir}:
+{ stdenv, fetchzip, buildDunePackage, yojson }:
 
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "4.00";
+buildDunePackage rec {
+  pname = "merlin";
+  version = "3.2.2";
 
-stdenv.mkDerivation {
+  minimumOCamlVersion = "4.02";
 
-  name = "merlin-1.7.1";
-
-  src = fetchurl {
-    url = https://github.com/the-lambda-church/merlin/archive/v1.7.1.tar.gz;
-    sha256 = "c3b60c7b3fddaa2860e0d8ac0d4fed2ed60e319875734c7ac1a93df524c67aff";
+  src = fetchzip {
+    url = "https://github.com/ocaml/merlin/archive/v${version}.tar.gz";
+    sha256 = "15ssgmwdxylbwhld9p1cq8x6kadxyhll5bfyf11dddj6cldna3hb";
   };
 
-  buildInputs = [ ocaml findlib yojson menhir ];
-
-  prefixKey = "--prefix ";
+  buildInputs = [ yojson ];
 
   meta = with stdenv.lib; {
     description = "An editor-independent tool to ease the development of programs in OCaml";
-    homepage = "http://the-lambda-church.github.io/merlin/";
+    homepage = "https://github.com/ocaml/merlin";
     license = licenses.mit;
     maintainers = [ maintainers.vbgl ];
   };

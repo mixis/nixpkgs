@@ -4,7 +4,7 @@ stdenv.mkDerivation rec {
   name = "sloccount-2.26";
 
   src = fetchurl {
-    url = "http://www.dwheeler.com/sloccount/${name}.tar.gz";
+    url = "https://www.dwheeler.com/sloccount/${name}.tar.gz";
     sha256 = "0ayiwfjdh1946asah861ah9269s5xkc8p5fv1wnxs9znyaxs4zzs";
   };
 
@@ -29,9 +29,7 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  configurePhase = ''
-    sed -i "makefile" -"es|PREFIX[[:blank:]]*=.*$|PREFIX = $out|g"
-  '';
+  makeFlags = "PREFIX=$(out) CC=cc";
 
   doCheck = true;
   checkPhase = ''HOME="$TMPDIR" PATH="$PWD:$PATH" make test'';
@@ -58,7 +56,7 @@ stdenv.mkDerivation rec {
 
     license = stdenv.lib.licenses.gpl2Plus;
 
-    homepage = http://www.dwheeler.com/sloccount/;
+    homepage = https://www.dwheeler.com/sloccount/;
 
     maintainers = [ ];
     platforms = stdenv.lib.platforms.all;

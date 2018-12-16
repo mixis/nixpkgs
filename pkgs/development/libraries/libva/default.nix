@@ -1,21 +1,45 @@
-{ stdenv, fetchurl, libX11, pkgconfig, libXext, mesa, libdrm, libXfixes, wayland, libffi }:
+{ stdenv, lib, fetchFromGitHub, autoreconfHook, pkgconfig
+, libXext, libdrm, libXfixes, wayland, libffi, libX11
+, libGL, libGL_driver
+, minimal ? false, libva-minimal
+}:
 
 stdenv.mkDerivation rec {
-  name = "libva-1.3.1";
-  
-  src = fetchurl {
-    url = "http://www.freedesktop.org/software/vaapi/releases/libva/${name}.tar.bz2";
-    sha256 = "15y27jdnfvf9krg4s3a1c29rn9pvyp43wckpwhd2rg4wrbqv32c7";
+  name = "libva-${lib.optionalString minimal "minimal-"}${version}";
+  version = "2.3.0";
+
+  # update libva-utils and vaapiIntel as well
+  src = fetchFromGitHub {
+    owner  = "01org";
+    repo   = "libva";
+    rev    = version;
+    sha256 = "0zip22b5qwyjygsmrmjq62hdpl9z77d84h5hni8cn6xz5cmbw29z";
   };
 
-  buildInputs = [ libX11 libXext pkgconfig mesa libdrm libXfixes wayland libffi ];
+  outputs = [ "dev" "out" ];
 
-  configureFlags = [ "--enable-glx" ];
+  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+
+  buildInputs = [ libdrm ]
+    ++ lib.optionals (!minimal) [ libva-minimal libX11 libXext libXfixes wayland libffi libGL ];
+  # TODO: share libs between minimal and !minimal - perhaps just symlink them
+
+  enableParallelBuilding = true;
+
+  configureFlags = [
+    # Add FHS paths for non-NixOS applications.
+    "--with-drivers-path=${libGL_driver.driverLink}/lib/dri:/usr/lib/dri:/usr/lib32/dri"
+  ] ++ lib.optionals (!minimal) [ "--enable-glx" ];
+
+  installFlags = [
+    "dummy_drv_video_ladir=$(out)/lib/dri"
+  ];
 
   meta = with stdenv.lib; {
+    description = "VAAPI library: Video Acceleration API";
     homepage = http://www.freedesktop.org/wiki/Software/vaapi;
     license = licenses.mit;
-    description = "VAAPI library: Video Acceleration API";
+    maintainers = with maintainers; [ garbas ];
     platforms = platforms.unix;
   };
 }

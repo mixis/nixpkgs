@@ -1,29 +1,37 @@
 { stdenv, fetchurl
-, openssl, qt4, mesa, zlib
+, openssl, qt5, libGLU_combined, zlib, pkgconfig, libav
 }:
 
 stdenv.mkDerivation rec {
   name = "makemkv-${ver}";
-  ver = "1.8.0";
+  ver = "1.14.1";
   builder = ./builder.sh;
 
+  # Using two URLs as the first one will break as soon as a new version is released
   src_bin = fetchurl {
-    url = "http://www.makemkv.com/download/makemkv-bin-${ver}.tar.gz";
-    sha256 = "1f465rdv5ibnh5hnfmvmlid0yyzkansjw8l1mi5qd3bc6ca4k30c";
+    urls = [
+      "http://www.makemkv.com/download/makemkv-bin-${ver}.tar.gz"
+      "http://www.makemkv.com/download/old/makemkv-bin-${ver}.tar.gz"
+    ];
+    sha256 = "1n4gjb1531gkvnjzipw63v3zdxmrq5nai9nn6m2ix3lskksjrrhp";
   };
 
-  src_oss = fetchurl { 
-    url = "http://www.makemkv.com/download/makemkv-oss-${ver}.tar.gz";
-    sha256 = "0kj1mpkzz2cvi0ibdgdzfwbh9k2jfj3ra5m3hd7iyc5ng21v4sk3";
+  src_oss = fetchurl {
+    urls = [
+      "http://www.makemkv.com/download/makemkv-oss-${ver}.tar.gz"
+      "http://www.makemkv.com/download/old/makemkv-oss-${ver}.tar.gz"
+    ];
+    sha256 = "0ysb0nm11vp2ni838p5q3gqan5nrqbr7rz0h24j8p62827pib3pw";
   };
 
-  buildInputs = [openssl qt4 mesa zlib];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [openssl qt5.qtbase libGLU_combined zlib libav];
 
-  libPath = stdenv.lib.makeLibraryPath [stdenv.gcc.gcc openssl mesa qt4 zlib ] 
-          + ":" + stdenv.gcc.gcc + "/lib64";
+  libPath = stdenv.lib.makeLibraryPath [stdenv.cc.cc openssl libGLU_combined qt5.qtbase zlib ]
+          + ":" + stdenv.cc.cc + "/lib64";
 
-  meta = {
-    description = "convert blu-ray and dvd to mkv";
+  meta = with stdenv.lib; {
+    description = "Convert blu-ray and dvd to mkv";
     longDescription = ''
       makemkv is a one-click QT application that transcodes an encrypted
       blu-ray or DVD disc into a more portable set of mkv files, preserving
@@ -33,7 +41,9 @@ stdenv.mkDerivation rec {
       can always download the latest version from makemkv.com that will reset the
       expiration date.
     '';
-    license = stdenv.lib.licenses.unfree;
+    license = licenses.unfree;
     homepage = http://makemkv.com;
+    platforms = [ "x86_64-linux" ];
+    maintainers = [ maintainers.titanous ];
   };
 }

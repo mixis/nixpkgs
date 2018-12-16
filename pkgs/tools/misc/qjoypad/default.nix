@@ -5,7 +5,8 @@ stdenv.mkDerivation rec {
     url = "mirror://sourceforge/qjoypad/${name}.tar.gz";
     sha256 = "1jlm7i26nfp185xrl41kz5z6fgvyj51bjpz48cg27xx64y40iamm";
   };
-  buildInputs = [ pkgconfig libX11 libXtst qt4 ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ libX11 libXtst qt4 ];
   patchPhase = ''
     cd src
     substituteInPlace config --replace /bin/bash /bin/sh
@@ -31,7 +32,7 @@ stdenv.mkDerivation rec {
       experience just a little bit nicer.
     '';
     homepage = http://qjoypad.sourceforge.net;
-    license = with stdenv.lib.licenses; gpl2;
+    license = stdenv.lib.licenses.gpl2;
     maintainers = with stdenv.lib.maintainers; [ astsmtl ];
     platforms = with stdenv.lib.platforms; linux;
   };

@@ -1,43 +1,52 @@
-{ stdenv, fetchurl, pkgconfig, intltool, python, pyrex, pygobject, pygtk
-, notify, pythonDBus, bluez, glib, gtk, libstartup_notification
-, makeWrapper, xdg_utils, obex_data_server
-, pulseaudio
-}:
-   
-stdenv.mkDerivation rec {
-  name = "blueman-1.23";
-   
+{ stdenv, lib, fetchurl, intltool, pkgconfig, python3Packages, bluez, gtk3
+, obex_data_server, xdg_utils, libnotify, dnsmasq, dhcp
+, hicolor-icon-theme, librsvg, wrapGAppsHook, gobject-introspection
+, withPulseAudio ? true, libpulseaudio }:
+
+let
+  pythonPackages = python3Packages;
+  binPath = lib.makeBinPath [ xdg_utils dnsmasq dhcp ];
+
+in stdenv.mkDerivation rec {
+  name = "blueman-${version}";
+  version = "2.0.6";
+
   src = fetchurl {
-    url = "http://download.tuxfamily.org/blueman/${name}.tar.gz";
-    sha256 = "04ghlh4h5bwp9mqr5jxcmjm01595l5fq5561qxvf369fvjy63cjh";
+    url = "https://github.com/blueman-project/blueman/releases/download/${version}/${name}.tar.xz";
+    sha256 = "0bc1lfsjkbrg9f1jnw6mx7bp04x76ljy9g0rgx7n80vaj0hpz3bj";
   };
 
-  configureFlags = "--disable-polkit";
+  nativeBuildInputs = [
+    gobject-introspection intltool pkgconfig pythonPackages.cython
+    pythonPackages.wrapPython wrapGAppsHook
+  ];
 
-  buildInputs =
-    [ pkgconfig intltool python pyrex pygobject pygtk notify pythonDBus
-      bluez glib gtk libstartup_notification makeWrapper
-    ];
+  buildInputs = [ bluez gtk3 pythonPackages.python libnotify librsvg hicolor-icon-theme ]
+                ++ pythonPath
+                ++ lib.optional withPulseAudio libpulseaudio;
 
-  # !!! Ugly.
-  PYTHONPATH = "${pygobject}/lib/${python.libPrefix}/site-packages/gtk-2.0:${pygtk}/lib/${python.libPrefix}/site-packages/gtk-2.0:${notify}/lib/${python.libPrefix}/site-packages/gtk-2.0";
+  postPatch = lib.optionalString withPulseAudio ''
+    sed -i 's,CDLL(",CDLL("${libpulseaudio.out}/lib/,g' blueman/main/PulseAudioUtils.py
+  '';
 
-  postInstall =
-    ''
-      # Create wrappers that set the environment correctly.
-      for i in $out/bin/* $out/libexec/*; do
-          wrapProgram $i \
-              --set PYTHONPATH "$(toPythonPath $out):$PYTHONPATH" \
-              --set LD_LIBRARY_PATH "${pulseaudio}/lib:" \
-              --prefix PATH : ${xdg_utils}/bin
-      done
+  pythonPath = with pythonPackages; [ dbus-python pygobject3 pycairo ];
 
-      mkdir -p $out/nix-support
-      echo ${obex_data_server} > $out/nix-support/propagated-user-env-packages
-    ''; # */
+  propagatedUserEnvPkgs = [ obex_data_server ];
 
-  meta = {
-    homepage = http://blueman-project.org/;
+  configureFlags = [ (lib.enableFeature withPulseAudio "pulseaudio") ];
+
+  postFixup = ''
+    makeWrapperArgs="--prefix PATH ':' ${binPath}"
+    # This mimics ../../../development/interpreters/python/wrap.sh
+    wrapPythonProgramsIn "$out/bin" "$out $pythonPath"
+    wrapPythonProgramsIn "$out/libexec" "$out $pythonPath"
+  '';
+
+  meta = with lib; {
+    homepage = https://github.com/blueman-project/blueman;
     description = "GTK+-based Bluetooth Manager";
+    license = licenses.gpl3;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ abbradar ];
   };
 }

@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, rpm, cpio, substituteAll }:
+{ stdenv, rpm, cpio, substituteAll }:
 
 stdenv.mkDerivation rec {
   name = "rpmextract";
@@ -16,6 +16,6 @@ stdenv.mkDerivation rec {
     description = "Script to extract RPM archives";
     platforms = platforms.all;
     license = licenses.gpl2;
-    maintainers = maintainers.abbradar;
+    maintainers = with maintainers; [ abbradar ];
   };
 }

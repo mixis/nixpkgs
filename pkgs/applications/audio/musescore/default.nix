@@ -1,33 +1,37 @@
-{ stdenv, fetchurl, makeWrapper, cmake, qt4, pkgconfig, alsaLib, portaudio, jack2, libsndfile}:
+{ stdenv, lib, fetchFromGitHub, cmake, pkgconfig
+, alsaLib, freetype, libjack2, lame, libogg, libpulseaudio, libsndfile, libvorbis
+, portaudio, portmidi, qtbase, qtdeclarative, qtscript, qtsvg, qttools
+, qtwebkit, qtxmlpatterns
+}:
 
 stdenv.mkDerivation rec {
-  name = "musescore-1.3";
+  name = "musescore-${version}";
+  version = "2.3.2";
 
-  src = fetchurl {
-    url = "http://ftp.osuosl.org/pub/musescore/releases/MuseScore-1.3/mscore-1.3.tar.bz2";
-    sha256 = "a0b60cc892ac0266c58fc6392be72c0a21c3aa7fd0b6e4f1dddad1c8b36be683";
+  src = fetchFromGitHub {
+    owner  = "musescore";
+    repo   = "MuseScore";
+    rev    = "v${version}";
+    sha256 = "0ncv0xfmq87plqa43cm0fpidlwzz1nq5s7h7139llrbc36yp3pr1";
   };
 
-  buildInputs = [ makeWrapper cmake qt4 pkgconfig alsaLib portaudio jack2 libsndfile ];
+  cmakeFlags = [
+  ] ++ lib.optional (lib.versionAtLeast freetype.version "2.5.2") "-DUSE_SYSTEM_FREETYPE=ON";
 
-  configurePhase = ''
-    cd mscore;
-    mkdir build;
-    cd build;
-    cmake -DCMAKE_INSTALL_PREFIX=$out -DQT_PLUGINS_DIR=$out/lib/qt4/plugins -DCMAKE_BUILD_TYPE=Release ..'';
+  nativeBuildInputs = [ cmake pkgconfig ];
 
-  preBuild = ''make lrelease;'';
-
-  postInstall = ''
-    wrapProgram $out/bin/mscore --prefix QT_PLUGIN_PATH : $out/lib/qt4/plugins
-  '';
+  buildInputs = [
+    alsaLib libjack2 freetype lame libogg libpulseaudio libsndfile libvorbis
+    portaudio portmidi # tesseract
+    qtbase qtdeclarative qtscript qtsvg qttools qtwebkit qtxmlpatterns
+  ];
 
   meta = with stdenv.lib; {
-    description = "Qt-based score editor";
-    homepage = http://musescore.org/;
+    description = "Music notation and composition software";
+    homepage = https://musescore.org/;
     license = licenses.gpl2;
+    maintainers = with maintainers; [ vandenoever ];
     platforms = platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.vandenoever ];
     repositories.git = https://github.com/musescore/MuseScore;
   };
 }

@@ -1,17 +1,21 @@
-{ stdenv, fetchurl }:
+{ stdenv, fetchFromGitHub }:
 
-stdenv.mkDerivation  rec {
+stdenv.mkDerivation rec {
   name = "mxml-${version}";
-  version = "2.8";
+  version = "2.12";
 
-  src = fetchurl {
-    url = "http://www.msweet.org/files/project3/${name}.tar.gz";
-    sha256 = "1m8i62dfmgfc1v8y3zx0r4i2hr5n86yw01xh5kiq53bi3bwnk4qc";
+  src = fetchFromGitHub {
+    owner = "michaelrsweet";
+    repo = "mxml";
+    rev = "v${version}";
+    sha256 = "1m8z503vnfpm576gjpp1h7zmx09n50if2i28v24yx80j820ip94s";
   };
 
+  enableParallelBuilding = true;
+
   meta = with stdenv.lib; {
-    description = "a small XML library";
-    homepage = http://www.minixml.org;
+    description = "A small XML library";
+    homepage = https://www.msweet.org/mxml/;
     license = licenses.lgpl2;
     platforms = platforms.linux;
     maintainers = [ maintainers.goibhniu ];

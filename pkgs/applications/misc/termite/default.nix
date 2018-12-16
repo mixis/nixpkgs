@@ -1,26 +1,42 @@
-{ stdenv, fetchgit, pkgconfig, vte, gtk, ncurses }:
+{ stdenv, fetchFromGitHub, pkgconfig, vte, gtk3, ncurses, wrapGAppsHook }:
 
 stdenv.mkDerivation rec {
   name = "termite-${version}";
-  version = "v7";
+  version = "14";
 
-  src = fetchgit {
-    url = "https://github.com/thestinger/termite";
-    rev = "f0ff025c1bb6a1e3fd83072f00c2dc42a0701f46";
-    sha256 = "057yzlqvp84fkmhn4bz9071glj4rh4187xhg48cdppf2w6phcbxp";
+  src = fetchFromGitHub {
+    owner = "thestinger";
+    repo = "termite";
+    rev = "v${version}";
+    sha256 = "0dmz9rpc2fdvcwhcmjnhb48ixn403gxpq03g334d1hgjw2hsyx7x";
+    fetchSubmodules = true;
   };
 
-  makeFlags = "VERSION=${version}";
+  # https://github.com/thestinger/termite/pull/516
+  patches = [ ./url_regexp_trailing.patch ./add_errno_header.patch
+              ] ++ stdenv.lib.optional stdenv.isDarwin ./remove_ldflags_macos.patch;
 
-  buildInputs = [pkgconfig vte gtk ncurses];
+  makeFlags = [ "VERSION=v${version}" "PREFIX=" "DESTDIR=$(out)" ];
 
-  installFlags = "PREFIX=$(out)";
+  buildInputs = [ vte gtk3 ncurses ];
 
-  meta = {
+  nativeBuildInputs = [ wrapGAppsHook pkgconfig ];
+
+  outputs = [ "out" "terminfo" ];
+
+  postInstall = ''
+    mkdir -p $terminfo/share
+    mv $out/share/terminfo $terminfo/share/terminfo
+
+    mkdir -p $out/nix-support
+    echo "$terminfo" >> $out/nix-support/propagated-user-env-packages
+  '';
+
+  meta = with stdenv.lib; {
     description = "A simple VTE-based terminal";
-    license = stdenv.lib.licenses.lgpl2Plus;
+    license = licenses.lgpl2Plus;
     homepage = https://github.com/thestinger/termite/;
-    maintainers = with stdenv.lib.maintainers; [koral];
-    platforms = stdenv.lib.platforms.all;
+    maintainers = with maintainers; [ koral garbas ];
+    platforms = platforms.all;
   };
 }

@@ -1,4 +1,4 @@
-{ fetchurl, stdenv, perl, bison, flex, pkgconfig, glib, libxml2, libintlOrEmpty }:
+{ fetchurl, stdenv, perl, bison, flex, pkgconfig, glib, libxml2, libintl }:
 
 stdenv.mkDerivation rec {
   name = "gstreamer-0.10.36";
@@ -11,16 +11,27 @@ stdenv.mkDerivation rec {
     sha256 = "1nkid1n2l3rrlmq5qrf5yy06grrkwjh3yxl5g0w58w0pih8allci";
   };
 
-  buildInputs = [ perl bison flex pkgconfig ];
-  propagatedBuildInputs = [ glib libxml2 ] ++ libintlOrEmpty;
+  outputs = [ "out" "dev" ];
 
-  patchPhase = ''
+  nativeBuildInputs = [ pkgconfig libintl ];
+  buildInputs = [ perl bison flex ];
+  propagatedBuildInputs = [ glib libxml2 ];
+
+  # See https://trac.macports.org/ticket/40783 for explanation of patch
+  patches = stdenv.lib.optional stdenv.isDarwin ./darwin.patch;
+
+  postPatch = ''
     sed -i -e 's/^   /\t/' docs/gst/Makefile.in docs/libs/Makefile.in docs/plugins/Makefile.in
   '';
 
-  configureFlags = ''
-    --disable-examples --enable-failing-tests --localstatedir=/var --disable-gtk-doc --disable-docbook
-  '';
+  configureFlags = [
+    "--disable-examples"
+    "--localstatedir=/var"
+    "--disable-gtk-doc"
+    "--disable-docbook"
+  ];
+
+  doCheck = false; # fails. 2 tests crash
 
   postInstall = ''
     # Hm, apparently --disable-gtk-doc is ignored...
@@ -32,7 +43,7 @@ stdenv.mkDerivation rec {
   setupHook = ./setup-hook.sh;
 
   meta = {
-    homepage = http://gstreamer.freedesktop.org;
+    homepage = https://gstreamer.freedesktop.org;
 
     description = "Library for constructing graphs of media-handling components";
 
@@ -49,5 +60,6 @@ stdenv.mkDerivation rec {
     '';
 
     license = stdenv.lib.licenses.lgpl2Plus;
+    platforms = stdenv.lib.platforms.unix;
   };
 }

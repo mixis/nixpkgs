@@ -1,51 +1,83 @@
-{ stdenv, fetchurl, zlib, xz, python ? null, pythonSupport ? true }:
-
-assert pythonSupport -> python != null;
-
-#TODO: share most stuff between python and non-python builds, perhaps via multiple-output
+{ stdenv, lib, fetchurl, fetchpatch
+, zlib, xz, python2, ncurses, findXMLCatalogs
+, pythonSupport ? stdenv.buildPlatform == stdenv.hostPlatform
+, icuSupport ? false, icu ? null
+, enableShared ? stdenv.hostPlatform.libc != "msvcrt"
+, enableStatic ? !enableShared,
+}:
 
 let
-  version = "2.9.1";
-in
+  python = python2;
 
-stdenv.mkDerivation (rec {
+in stdenv.mkDerivation rec {
   name = "libxml2-${version}";
+  version = "2.9.8";
 
   src = fetchurl {
-    url = "ftp://xmlsoft.org/libxml2/${name}.tar.gz";
-    sha256 = "1nqgd1qqmg0cg09mch78m2ac9klj9n87blilx4kymi7jcv5n8g7x";
+    url = "http://xmlsoft.org/sources/${name}.tar.gz";
+    sha256 = "0ci7is75bwqqw2p32vxvrk6ds51ik7qgx73m920rakv5jlayax0b";
   };
 
-  buildInputs = stdenv.lib.optional pythonSupport python
+  patches = [
+    (fetchpatch {
+      name = "CVE-2018-14567_CVE-2018-9251.patch";
+      url = https://gitlab.gnome.org/GNOME/libxml2/commit/2240fbf5912054af025fb6e01e26375100275e74.patch;
+      sha256 = "1xpqsfkzhrqasza51c821mnds5l317djrz8086fmzpyf68vld03h";
+    })
+    (fetchpatch {
+      name = "CVE-2018-14404.patch";
+      url = https://gitlab.gnome.org/GNOME/libxml2/commit/a436374994c47b12d5de1b8b1d191a098fa23594.patch;
+      sha256 = "19vp7p32vrninnfa7vk9ipw7n4cl1gg16xxbhjy2d0kwp1crvzqh";
+    })
+  ];
+
+  outputs = [ "bin" "dev" "out" "man" "doc" ]
+    ++ lib.optional pythonSupport "py"
+    ++ lib.optional (enableStatic && enableShared) "static";
+  propagatedBuildOutputs = "out bin" + lib.optionalString pythonSupport " py";
+
+  buildInputs = lib.optional pythonSupport python
+    ++ lib.optional (pythonSupport && python?isPy3 && python.isPy3) ncurses
     # Libxml2 has an optional dependency on liblzma.  However, on impure
     # platforms, it may end up using that from /usr/lib, and thus lack a
     # RUNPATH for that, leading to undefined references for its users.
-    ++ (stdenv.lib.optional stdenv.isFreeBSD xz);
+    ++ lib.optional stdenv.isFreeBSD xz;
 
-  propagatedBuildInputs = [ zlib ];
+  propagatedBuildInputs = [ zlib findXMLCatalogs ] ++ lib.optional icuSupport icu;
 
-  setupHook = ./setup-hook.sh;
-
-  passthru = { inherit pythonSupport version; };
+  configureFlags = [
+    "--exec_prefix=$dev"
+    (lib.enableFeature enableStatic "static")
+    (lib.enableFeature enableShared "shared")
+    (lib.withFeature icuSupport "icu")
+    (lib.withFeatureAs pythonSupport "python" python)
+  ];
 
   enableParallelBuilding = true;
+
+  doCheck = (stdenv.hostPlatform == stdenv.buildPlatform) && !stdenv.isDarwin &&
+    stdenv.hostPlatform.libc != "musl";
+
+  preInstall = lib.optionalString pythonSupport
+    ''substituteInPlace python/libxml2mod.la --replace "${python}" "$py"'';
+  installFlags = lib.optionalString pythonSupport
+    ''pythondir="$(py)/lib/${python.libPrefix}/site-packages"'';
+
+  postFixup = ''
+    moveToOutput bin/xml2-config "$dev"
+    moveToOutput lib/xml2Conf.sh "$dev"
+    moveToOutput share/man/man1 "$bin"
+  '' + lib.optionalString (enableStatic && enableShared) ''
+    moveToOutput lib/libxml2.a "$static"
+  '';
+
+  passthru = { inherit version; pythonSupport = pythonSupport; };
 
   meta = {
     homepage = http://xmlsoft.org/;
     description = "An XML parsing library for C";
-    license = "bsd";
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
+    license = lib.licenses.mit;
+    platforms = lib.platforms.all;
+    maintainers = [ lib.maintainers.eelco ];
   };
-
-} // stdenv.lib.optionalAttrs pythonSupport {
-  configureFlags = "--with-python=${python}";
-
-  # this is a pair of ugly hacks to make python stuff install into the right place
-  preInstall = ''substituteInPlace python/libxml2mod.la --replace "${python}" "$out"'';
-  installFlags = ''pythondir="$(out)/lib/${python.libPrefix}/site-packages"'';
-
-} // stdenv.lib.optionalAttrs (!pythonSupport) {
-  configureFlags = "--with-python=no"; # otherwise build impurity bites us
-})
-
+}

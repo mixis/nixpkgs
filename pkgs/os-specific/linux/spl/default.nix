@@ -1,31 +1,42 @@
-{ stdenv, fetchurl, kernel, perl, autoconf, automake, libtool, coreutils, gawk }:
+{ fetchFromGitHub, stdenv, autoreconfHook, coreutils, gawk
 
-stdenv.mkDerivation {
-  name = "spl-0.6.3-${kernel.version}";
-  src = fetchurl {
-    url = http://archive.zfsonlinux.org/downloads/zfsonlinux/spl/spl-0.6.3.tar.gz;
-    sha256 = "1qqzyj2if5wai4jiwml4i8s6v8k7hbi7jmiph800lhkk5j8s72l9";
+# Kernel dependencies
+, kernel
+}:
+
+with stdenv.lib;
+
+assert kernel != null;
+
+stdenv.mkDerivation rec {
+  name = "spl-${version}-${kernel.version}";
+  version = "0.7.12";
+
+  src = fetchFromGitHub {
+    owner = "zfsonlinux";
+    repo = "spl";
+    rev = "spl-${version}";
+    sha256 = "13zqh1g132g63zv54l3bsg5kras9mllkx9wvlnfs13chfr7vpp4p";
   };
 
-  patches = [ ./install_prefix.patch ./const.patch ./kernel-3.16.patch ./kernel-3.17.patch ];
+  patches = [ ./install_prefix.patch ];
 
-  buildInputs = [ perl autoconf automake libtool ];
+  nativeBuildInputs = [ autoreconfHook ] ++ kernel.moduleBuildDependencies;
+
+  hardeningDisable = [ "fortify" "stackprotector" "pic" ];
 
   preConfigure = ''
-    ./autogen.sh
-
     substituteInPlace ./module/spl/spl-generic.c --replace /usr/bin/hostid hostid
-    substituteInPlace ./module/spl/spl-module.c  --replace /bin/mknod mknod
-
     substituteInPlace ./module/spl/spl-generic.c --replace "PATH=/sbin:/usr/sbin:/bin:/usr/bin" "PATH=${coreutils}:${gawk}:/bin"
     substituteInPlace ./module/splat/splat-vnode.c --replace "PATH=/sbin:/usr/sbin:/bin:/usr/bin" "PATH=${coreutils}:/bin"
     substituteInPlace ./module/splat/splat-linux.c --replace "PATH=/sbin:/usr/sbin:/bin:/usr/bin" "PATH=${coreutils}:/bin"
   '';
 
-  configureFlags = ''
-     --with-linux=${kernel.dev}/lib/modules/${kernel.modDirVersion}/source
-     --with-linux-obj=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build
-  '';
+  configureFlags = [
+    "--with-config=kernel"
+    "--with-linux=${kernel.dev}/lib/modules/${kernel.modDirVersion}/source"
+    "--with-linux-obj=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+  ];
 
   enableParallelBuilding = true;
 
@@ -38,8 +49,8 @@ stdenv.mkDerivation {
     '';
 
     homepage = http://zfsonlinux.org/;
-    platforms = stdenv.lib.platforms.linux;
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = with stdenv.lib.maintainers; [ jcumming wizeman ];
+    platforms = platforms.linux;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ jcumming wizeman wkennington fpletz globin ];
   };
 }

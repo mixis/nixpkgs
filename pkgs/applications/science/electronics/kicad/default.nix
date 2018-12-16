@@ -1,44 +1,72 @@
-{ stdenv, fetchurl, fetchbzr, cmake, mesa, wxGTK, zlib, libX11, gettext }:
+{ wxGTK, lib, stdenv, fetchurl, cmake, libGLU_combined, zlib
+, libX11, gettext, glew, glm, cairo, curl, openssl, boost, pkgconfig
+, doxygen, pcre, libpthreadstubs, libXdmcp
+, wrapGAppsHook
+, oceSupport ? true, opencascade
+, ngspiceSupport ? true, libngspice
+, swig, python, pythonPackages
+}:
 
+assert ngspiceSupport -> libngspice != null;
+
+with lib;
 stdenv.mkDerivation rec {
-  name = "kicad-20131025";
+  name = "kicad-${version}";
+  series = "5.0";
+  version = "5.0.1";
 
-  src = fetchbzr {
-    url = "https://code.launchpad.net/~kicad-stable-committers/kicad/stable";
-    rev = 4024;
-    sha256 = "1sv1l2zpbn6439ccz50p05hvqg6j551aqra551wck9h3929ghly5";
+  src = fetchurl {
+    url = "https://launchpad.net/kicad/${series}/${version}/+download/kicad-${version}.tar.xz";
+    sha256 = "0skig2wdxxc2677m8a8m1xrg3pkhqiqnmkcyr2hv0b2j30rzdr2z";
   };
 
-  srcLibrary = fetchbzr {
-    url = "http://bazaar.launchpad.net/~kicad-lib-committers/kicad/library";
-    rev = 293;
-    sha256 = "1wn9a4nhqyjzzfkq6xm7ag8n5n10xy7gkq6i7yry7wxini7pzv1i";
-  };
-
-  cmakeFlags = "-DKICAD_STABLE_VERSION=ON";
-
-  # They say they only support installs to /usr or /usr/local,
-  # so we have to handle this.
-  patchPhase = ''
-    sed -i -e 's,/usr/local/kicad,'$out,g common/gestfich.cpp
+  postPatch = ''
+    substituteInPlace CMakeModules/KiCadVersion.cmake \
+      --replace no-vcs-found ${version}
   '';
 
-  #enableParallelBuilding = true; # often fails on Hydra: fatal error: pcb_plot_params_lexer.h: No such file or directory
+  cmakeFlags = [
+    "-DKICAD_SCRIPTING=ON"
+    "-DKICAD_SCRIPTING_MODULES=ON"
+    "-DKICAD_SCRIPTING_WXPYTHON=ON"
+    # nix installs wxPython headers in wxPython package, not in wxwidget
+    # as assumed. We explicitely set the header location.
+    "-DCMAKE_CXX_FLAGS=-I${pythonPackages.wxPython}/include/wx-3.0"
+  ] ++ optionals (oceSupport) [ "-DKICAD_USE_OCE=ON" "-DOCE_DIR=${opencascade}" ]
+    ++ optional (ngspiceSupport) "-DKICAD_SPICE=ON";
 
-  buildInputs = [ cmake mesa wxGTK zlib libX11 gettext ];
+  nativeBuildInputs = [
+    cmake
+    doxygen
+    pkgconfig
+    wrapGAppsHook
+    pythonPackages.wrapPython
+  ];
+  pythonPath = [ pythonPackages.wxPython ];
+  propagatedBuildInputs = [ pythonPackages.wxPython ];
 
-  postInstall = ''
-    mkdir library
-    cd library
-    cmake -DCMAKE_INSTALL_PREFIX=$out $srcLibrary
-    make install
+  buildInputs = [
+    libGLU_combined zlib libX11 wxGTK pcre libXdmcp gettext glew glm libpthreadstubs
+    cairo curl openssl boost
+    swig python
+  ] ++ optional (oceSupport) opencascade
+    ++ optional (ngspiceSupport) libngspice;
+
+  # this breaks other applications in kicad
+  dontWrapGApps = true;
+
+  preFixup = ''
+    buildPythonPath "$out $pythonPath"
+    gappsWrapperArgs+=(--set PYTHONPATH "$program_PYTHONPATH")
+
+    wrapProgram "$out/bin/kicad" "''${gappsWrapperArgs[@]}"
   '';
 
   meta = {
     description = "Free Software EDA Suite";
-    homepage = "http://www.kicad-pcb.org/";
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = with stdenv.lib.maintainers; [viric];
-    platforms = with stdenv.lib.platforms; linux;
+    homepage = http://www.kicad-pcb.org/;
+    license = licenses.gpl2;
+    maintainers = with maintainers; [ berce ];
+    platforms = with platforms; linux;
   };
 }

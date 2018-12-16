@@ -1,14 +1,18 @@
-{ stdenv, fetchurl, m4, perl, lzma }:
+{ stdenv, fetchurl, m4, perl, help2man
+}:
 
-stdenv.mkDerivation (rec {
-  name = "libtool-2.4.2";
+stdenv.mkDerivation rec {
+  name = "libtool-2.4.6";
 
   src = fetchurl {
     url = "mirror://gnu/libtool/${name}.tar.gz";
-    sha256 = "0649qfpzkswgcj9vqkkr9rn4nlcx80faxpyqscy2k1x9c94f93dk";
+    sha256 = "1qq61k6lp1fp75xs398yzi6wvbx232l7xbyn3p13cnh27mflvgg3";
   };
 
-  nativeBuildInputs = [ lzma m4 perl ];
+  outputs = [ "out" "lib" ];
+
+  nativeBuildInputs = [ perl help2man m4 ];
+  propagatedBuildInputs = [ m4 ];
 
   # Don't fixup "#! /bin/sh" in Libtool, otherwise it will use the
   # "fixed" path in generated files!
@@ -17,6 +21,11 @@ stdenv.mkDerivation (rec {
   # XXX: The GNU ld wrapper does all sorts of nasty things wrt. RPATH, which
   # leads to the failure of a number of tests.
   doCheck = false;
+  doInstallCheck = false;
+
+  # Don't run the native `strip' when cross-compiling.  This breaks at least
+  # with `.a' files for MinGW.
+  dontStrip = stdenv.hostPlatform != stdenv.buildPlatform;
 
   meta = {
     description = "GNU Libtool, a generic library support script";
@@ -31,18 +40,11 @@ stdenv.mkDerivation (rec {
       documentation for details.
     '';
 
-    homepage = http://www.gnu.org/software/libtool/;
+    homepage = https://www.gnu.org/software/libtool/;
 
     license = stdenv.lib.licenses.gpl2Plus;
 
-    maintainers = [ stdenv.lib.maintainers.ludo ];
+    maintainers = [ ];
+    platforms = stdenv.lib.platforms.unix;
   };
 }
-
-//
-
-# Don't run the native `strip' when cross-compiling.  This breaks at least
-# with `.a' files for MinGW.
-(if (stdenv ? cross)
- then { dontStrip = true; }
- else { }))

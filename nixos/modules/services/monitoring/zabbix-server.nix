@@ -32,6 +32,8 @@ let
       ${optionalString (cfg.dbPassword != "") ''
         DBPassword = ${cfg.dbPassword}
       ''}
+
+      ${config.services.zabbixServer.extraConfig}
     '';
 
   useLocalPostgres = cfg.dbServer == "localhost" || cfg.dbServer == "";
@@ -46,6 +48,7 @@ in
 
     services.zabbixServer.enable = mkOption {
       default = false;
+      type = types.bool;
       description = ''
         Whether to run the Zabbix server on this machine.
       '';
@@ -53,6 +56,7 @@ in
 
     services.zabbixServer.dbServer = mkOption {
       default = "localhost";
+      type = types.str;
       description = ''
         Hostname or IP address of the database server.
         Use an empty string ("") to use peer authentication.
@@ -61,7 +65,16 @@ in
 
     services.zabbixServer.dbPassword = mkOption {
       default = "";
+      type = types.str;
       description = "Password used to connect to the database server.";
+    };
+
+    services.zabbixServer.extraConfig = mkOption {
+      default = "";
+      type = types.lines;
+      description = ''
+        Configuration that is injected verbatim into the configuration file.
+      '';
     };
 
   };
@@ -72,7 +85,7 @@ in
 
     services.postgresql.enable = useLocalPostgres;
 
-    users.extraUsers = singleton
+    users.users = singleton
       { name = "zabbix";
         uid = config.ids.uids.zabbix;
         description = "Zabbix daemon user";
@@ -90,8 +103,8 @@ in
             chown zabbix ${stateDir} ${logDir} ${libDir}
 
             if ! test -e "${libDir}/db-created"; then
-                ${pkgs.postgresql}/bin/createuser --no-superuser --no-createdb --no-createrole zabbix || true
-                ${pkgs.postgresql}/bin/createdb --owner zabbix zabbix || true
+                ${pkgs.su}/bin/su -s "$SHELL" ${config.services.postgresql.superUser} -c '${pkgs.postgresql}/bin/createuser --no-superuser --no-createdb --no-createrole zabbix' || true
+                ${pkgs.su}/bin/su -s "$SHELL" ${config.services.postgresql.superUser} -c '${pkgs.postgresql}/bin/createdb --owner zabbix zabbix' || true
                 cat ${pkgs.zabbix.server}/share/zabbix/db/schema/postgresql.sql | ${pkgs.su}/bin/su -s "$SHELL" zabbix -c '${pkgs.postgresql}/bin/psql zabbix'
                 cat ${pkgs.zabbix.server}/share/zabbix/db/data/images_pgsql.sql | ${pkgs.su}/bin/su -s "$SHELL" zabbix -c '${pkgs.postgresql}/bin/psql zabbix'
                 cat ${pkgs.zabbix.server}/share/zabbix/db/data/data.sql | ${pkgs.su}/bin/su -s "$SHELL" zabbix -c '${pkgs.postgresql}/bin/psql zabbix'

@@ -1,19 +1,18 @@
-{ stdenv, fetchurl, pkgconfig, qt4 }:
+{ stdenv, fetchurl, pkgconfig, qmake, qtsvg }:
 
 stdenv.mkDerivation rec {
   name = "vym-${version}";
-  version = "2.2.4";
+  version = "2.6.11";
 
   src = fetchurl {
-    url = "http://downloads.sourceforge.net/project/vym/${version}/${name}.tar.bz2";
-    sha256 = "1x4qp6wpszscbbs4czkfvskm7qjglvxm813nqv281bpy4y1hhvgs";
+    url = "mirror://sourceforge/project/vym/2.6.0/${name}.tar.bz2";
+    sha256 = "1yznlb47jahd662a2blgh1ccwpl5dp5rjz9chsxjzhj3vbkzx3nl";
   };
 
-  buildInputs = [ pkgconfig qt4 ];
+  hardeningDisable = [ "format" ];
 
-  configurePhase = ''
-    qmake PREFIX="$out"
-  '';
+  nativeBuildInputs = [ pkgconfig qmake ];
+  buildInputs = [ qtsvg ];
 
   meta = with stdenv.lib; {
     description = "A mind-mapping software";
@@ -22,7 +21,7 @@ stdenv.mkDerivation rec {
       Such maps can help you to improve your creativity and effectivity. You can use them
       for time management, to organize tasks, to get an overview over complex contexts,
       to sort your ideas etc.
-      
+
       Maps can be drawn by hand on paper or a flip chart and help to structure your thoughs.
       While a tree like structure like shown on this page can be drawn by hand or any drawing software
       vym offers much more features to work with such maps.

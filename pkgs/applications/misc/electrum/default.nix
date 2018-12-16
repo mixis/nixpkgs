@@ -1,32 +1,87 @@
-{ stdenv, fetchurl, pythonPackages, slowaes, ecdsa, pyqt4 }:
+{ stdenv, fetchurl, python3, python3Packages, zbar }:
 
-pythonPackages.buildPythonPackage rec {
+let
+  qdarkstyle = python3Packages.buildPythonPackage rec {
+    pname = "QDarkStyle";
+    version = "2.5.4";
+    src = python3Packages.fetchPypi {
+      inherit pname version;
+      sha256 = "1w715m1i5pycfqcpkrggpn0rs9cakx6cm5v8rggcxnf4p0i0kdiy";
+    };
+    doCheck = false; # no tests
+  };
+in
+
+python3Packages.buildPythonApplication rec {
   name = "electrum-${version}";
-  version = "1.9.8";
+  version = "3.2.3";
 
   src = fetchurl {
-    url = "https://download.electrum.org/Electrum-${version}.tar.gz";
-    sha256 = "8fc144a32013e4a747fea27fff981762a6b9e14cde9ffb405c4c721975d846ff";
+    url = "https://download.electrum.org/${version}/Electrum-${version}.tar.gz";
+    sha256 = "139kzapas1l61w1in9f7c6ybricid4fzryfnvsrfhpaqh83ydn2c";
   };
 
-  buildInputs = [ slowaes ecdsa ];
-
-  propagatedBuildInputs = [ 
-    slowaes
+  propagatedBuildInputs = with python3Packages; [
+    dnspython
     ecdsa
-    pyqt4
+    jsonrpclib-pelix
+    matplotlib
+    pbkdf2
+    protobuf
+    pyaes
+    pycryptodomex
+    pyqt5
+    pysocks
+    qdarkstyle
+    qrcode
+    requests
+    tlslite-ng
+    typing
+
+    # plugins
+    keepkey
+    trezor
+    btchip
+
+    # TODO plugins
+    # amodem
   ];
 
-  postPatch = ''
-    mkdir -p $out/share
-    sed -i 's@usr_share = .*@usr_share = os.getenv("out")+"/share"@' setup.py
+  preBuild = ''
+    sed -i 's,usr_share = .*,usr_share = "'$out'/share",g' setup.py
+    pyrcc5 icons.qrc -o electrum/gui/qt/icons_rc.py
+    # Recording the creation timestamps introduces indeterminism to the build
+    sed -i '/Created: .*/d' electrum/gui/qt/icons_rc.py
+    sed -i "s|name = 'libzbar.*'|name='${zbar}/lib/libzbar.so'|" electrum/qrscanner.py
   '';
 
-  meta = {
-    description = "Bitcoin thin-wallet";
-    long-description = "Electrum is an easy to use Bitcoin client. It protects you from losing coins in a backup mistake or computer failure, because your wallet can be recovered from a secret phrase that you can write on paper or learn by heart. There is no waiting time when you start the client, because it does not download the Bitcoin blockchain.";
-    homepage = "https://electrum.org";
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ "emery@vfemail.net" ];
+  postInstall = ''
+    # Despite setting usr_share above, these files are installed under
+    # $out/nix ...
+    mv $out/${python3.sitePackages}/nix/store"/"*/share $out
+    rm -rf $out/${python3.sitePackages}/nix
+
+    substituteInPlace $out/share/applications/electrum.desktop \
+      --replace "Exec=electrum %u" "Exec=$out/bin/electrum %u"
+  '';
+
+  doCheck = false;
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/electrum help >/dev/null
+  '';
+
+  meta = with stdenv.lib; {
+    description = "A lightweight Bitcoin wallet";
+    longDescription = ''
+      An easy-to-use Bitcoin client featuring wallets generated from
+      mnemonic seeds (in addition to other, more advanced, wallet options)
+      and the ability to perform transactions without downloading a copy
+      of the blockchain.
+    '';
+    homepage = https://electrum.org/;
+    license = licenses.mit;
+    maintainers = with maintainers; [ ehmry joachifm np ];
   };
 }

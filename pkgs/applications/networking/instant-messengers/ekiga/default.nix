@@ -1,7 +1,7 @@
-{ stdenv, glib, fetchurl, cyrus_sasl, gettext, openldap, ptlib, opal, libXv, rarian, intltool
-, perl, perlXMLParser, evolution_data_server, gnome_doc_utils, avahi, autoreconfHook
-, libsigcxx, gtk, dbus_glib, libnotify, libXext, xextproto, gnome3, boost, libsecret
-, pkgconfig, libxml2, videoproto, unixODBC, db, nspr, nss, zlib, hicolor_icon_theme
+{ stdenv, glib, fetchurl, fetchpatch, cyrus_sasl, gettext, openldap, ptlib, opal, libXv, rarian, intltool
+, perlPackages, evolution-data-server, gnome-doc-utils, avahi, autoreconfHook
+, libsigcxx, gtk, dbus-glib, libnotify, libXext, xextproto, gnome3, boost, libsecret
+, pkgconfig, libxml2, videoproto, unixODBC, db, nspr, nss, zlib
 , libXrandr, randrproto, which, libxslt, libtasn1, gmp, nettle, sqlite, makeWrapper }:
 
 stdenv.mkDerivation rec {
@@ -13,28 +13,39 @@ stdenv.mkDerivation rec {
   };
 
   buildInputs = [ cyrus_sasl gettext openldap ptlib opal libXv rarian intltool
-                  perl perlXMLParser evolution_data_server gnome_doc_utils avahi
-                  libsigcxx gtk dbus_glib libnotify libXext xextproto sqlite
-                  gnome3.libsoup glib gnome3.gnome_icon_theme_symbolic
-                  hicolor_icon_theme gnome3.gnome_icon_theme boost boost.lib
+                  evolution-data-server gnome-doc-utils avahi
+                  libsigcxx gtk dbus-glib libnotify libXext xextproto sqlite
+                  gnome3.libsoup glib gnome3.defaultIconTheme boost
                   autoreconfHook pkgconfig libxml2 videoproto unixODBC db nspr
                   nss zlib libsecret libXrandr randrproto which libxslt libtasn1
-                  gmp nettle makeWrapper ];
+                  gmp nettle makeWrapper ]
+    ++ (with perlPackages; [ perl XMLParser ]);
 
   preAutoreconf = ''
     substituteInPlace configure.ac --replace AM_GCONF_SOURCE_2 ""
+    substituteInPlace configure.ac --replace gnome-icon-theme adwaita-icon-theme
   '';
 
   configureFlags = [
-    "--with-ldap-dir=${openldap}"
-    "--with-libsasl2-dir=${cyrus_sasl}"
-    "--with-boost-libdir=${boost.lib}/lib"
+    "--with-ldap-dir=${openldap.dev}"
+    "--with-libsasl2-dir=${cyrus_sasl.dev}"
+    "--with-boost-libdir=${boost.out}/lib"
     "--disable-gconf"
   ];
 
   enableParallelBuilding = true;
 
-  patches = [ ./autofoo.patch ./boost.patch ];
+  patches = [
+    (fetchpatch { url = https://sources.debian.net/data/main/e/ekiga/4.0.1-7/debian/patches/autofoo.patch;
+      sha256 = "1vyagslws4mm9yfz1m5p1kv9sxmk5lls9vxpm6j72q2ahsgydzx4";
+    })
+    (fetchpatch { url = https://sources.debian.net/data/main/e/ekiga/4.0.1-7/debian/patches/boost.patch;
+      sha256 = "01k0rw8ibrrf9zn9lx6dzbrgy58w089hqxqxqdv9whb65cldlj5s";
+    })
+    (fetchpatch { url = https://src.fedoraproject.org/rpms/ekiga/raw/dbf5f5ba449d22bd79f0394cddb7d4d8a88ec6ac/f/ekiga-4.0.1-libresolv.patch;
+      sha256 = "18wc68im8422ibpa0gkrkgjq41m7hikaha3xqmjs2km45i1cwcaz";
+    })
+  ];
 
   postInstall = ''
     wrapProgram "$out"/bin/ekiga \
@@ -45,6 +56,7 @@ stdenv.mkDerivation rec {
     description = "VOIP/Videoconferencing app with full SIP and H.323 support";
     maintainers = [ maintainers.raskin ];
     platforms = platforms.linux;
+    license = licenses.gpl2Plus;
   };
 
   passthru = {

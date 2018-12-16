@@ -1,58 +1,30 @@
-{stdenv, fetchurl}:
+{ stdenv, skawarePackages }:
 
-let
+with skawarePackages;
 
-  version = "1.6.0.0";
+buildPackage {
+  pname = "skalibs";
+  version = "2.7.0.0";
+  sha256 = "0mnprdf4w4ami0db22rwd111m037cdmn2p8xa4i8cbwxcrv4sjcn";
 
-in stdenv.mkDerivation rec {
-  name = "skalibs-${version}";
+  description = "A set of general-purpose C programming libraries";
 
-  src = fetchurl {
-    url = "http://skarnet.org/software/skalibs/${name}.tar.gz";
-    sha256 = "0jz3farll9n5jvz3g6wri99s6njkgmnf0r9jqjlg03f20dzv8c8w";
-  };
+  outputs = [ "lib" "dev" "doc" "out" ];
 
-  sourceRoot = "prog/${name}";
+  configureFlags = [
+    # assume /dev/random works
+    "--enable-force-devr"
+    "--libdir=\${lib}/lib"
+    "--dynlibdir=\${lib}/lib"
+    "--includedir=\${dev}/include"
+    "--sysdepdir=\${lib}/lib/skalibs/sysdeps"
+  ];
 
-  # See http://skarnet.org/cgi-bin/archive.cgi?1:mss:75:201405:pkmodhckjklemogbplje
-  patches = [ ./getpeereid.patch ];
+  postInstall = ''
+    rm -rf sysdeps.cfg
+    rm libskarnet.*
 
-  configurePhase = ''
-    pushd conf-compile
-
-    printf "$out/bin"     > conf-defaultpath
-    printf "$out/etc"     > conf-etc
-    printf "$out/bin"     > conf-install-command
-    printf "$out/include" > conf-install-include
-    printf "$out/libexec" > conf-install-libexec
-    printf "$out/lib"     > conf-install-library
-    printf "$out/lib"     > conf-install-library.so
-    printf "$out/sysdeps" > conf-install-sysdeps
-
-    # let nix builder strip things, cross-platform
-    truncate --size 0 conf-stripbins
-    truncate --size 0 conf-striplibs
-
-    rm -f flag-slashpackage
-    touch flag-allstatic
-    touch flag-forcedevr
-
-    popd
+    mv doc $doc/share/doc/skalibs/html
   '';
-
-  preBuild = ''
-    patchShebangs src/sys
-  '';
-
-  preInstall = ''
-    mkdir -p "$out/etc"
-  '';
-
-  meta = {
-    homepage = http://skarnet.org/software/skalibs/;
-    description = "A set of general-purpose C programming libraries.";
-    platforms = stdenv.lib.platforms.all;
-    license = stdenv.lib.licenses.isc;
-  };
 
 }

@@ -1,25 +1,37 @@
-{ pkgs, fetchurl, buildPythonPackage, sqlite3 }:
+{ stdenv, fetchFromGitHub, python2Packages,
+  asciidoc, libxml2, libxslt, docbook_xsl }:
 
-buildPythonPackage rec {
-  version = "6.5.6";
-  name = "offlineimap-${version}";
-  namePrefix = "";
+python2Packages.buildPythonApplication rec {
+  version = "7.2.1";
+  pname = "offlineimap";
 
-  src = fetchurl {
-    url = "https://github.com/OfflineIMAP/offlineimap/archive/v${version}.tar.gz";
-    sha256 = "1hr8yxb6r8lmdzzly4hafa1l1z9pfx14rsgc8qiy2zxfpg6ijcn2";
+  src = fetchFromGitHub {
+    owner = "OfflineIMAP";
+    repo = "offlineimap";
+    rev = "v${version}";
+    sha256 = "1m5i74baazwazqp98ssma968rnwzfl1nywb7icf0swc8447ps97q";
   };
+
+  postPatch = ''
+    # Skip xmllint to stop failures due to no network access
+    sed -i docs/Makefile -e "s|a2x -v -d |a2x -L -v -d |"
+  '';
 
   doCheck = false;
 
-  propagatedBuildInputs = [
-    sqlite3
-  ];
+  nativeBuildInputs = [ asciidoc libxml2 libxslt docbook_xsl ];
+  propagatedBuildInputs = with python2Packages; [ six kerberos ];
+
+  postInstall = ''
+    make -C docs man
+    install -D -m 644 docs/offlineimap.1 ''${!outputMan}/share/man/man1/offlineimap.1
+    install -D -m 644 docs/offlineimapui.7 ''${!outputMan}/share/man/man7/offlineimapui.7
+  '';
 
   meta = {
     description = "Synchronize emails between two repositories, so that you can read the same mailbox from multiple computers";
-    homepage = "http://offlineimap.org";
-    license = pkgs.lib.licenses.gpl2Plus;
-    maintainers = [ pkgs.lib.maintainers.garbas ];
+    homepage = http://offlineimap.org;
+    license = stdenv.lib.licenses.gpl2Plus;
+    maintainers = [ stdenv.lib.maintainers.garbas ];
   };
 }

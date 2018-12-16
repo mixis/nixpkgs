@@ -1,32 +1,84 @@
-{ stdenv, fetchurl, pam, pkgconfig, libxcb, glib, libXdmcp, itstool, libxml2
-, intltool, x11, libxklavier, libgcrypt, dbus/*for tests*/ }:
+{ stdenv, fetchFromGitHub, pam, pkgconfig, autoconf, automake, libtool, libxcb
+, glib, libXdmcp, itstool, intltool, libxklavier, libgcrypt, audit, busybox
+, polkit, accountsservice, gtk-doc, gnome3, gobject-introspection, vala
+, withQt4 ? false, qt4
+, withQt5 ? false, qtbase
+}:
 
-let
-  ver_branch = "1.8";
-  version = "1.8.6";
-in
+with stdenv.lib;
+
 stdenv.mkDerivation rec {
-  name = "lightdm-${version}";
+  pname = "lightdm";
+  version = "1.28.0";
 
-  src = fetchurl {
-    url = "${meta.homepage}/${ver_branch}/${version}/+download/${name}.tar.xz";
-    sha256 = "17ivc0c4dbnc0fzd581j53cn6hdav34zz2hswjzy8aczbpk605qi";
+  name = "${pname}-${version}";
+
+  outputs = [ "out" "dev" ];
+
+  src = fetchFromGitHub {
+    owner = "CanonicalLtd";
+    repo = pname;
+    rev = version;
+    sha256 = "1mmqy1jdvgc0h0h9gli7n4vdv5p8m5019qjr5ni4h73iz6mjdj2b";
   };
 
-  patches = [ ./lightdm.patch ];
-  patchFlags = "-p1";
+  nativeBuildInputs = [
+    autoconf
+    automake
+    gnome3.yelp-tools
+    gnome3.yelp-xsl
+    gobject-introspection
+    gtk-doc
+    intltool
+    itstool
+    libtool
+    pkgconfig
+    vala
+  ];
 
   buildInputs = [
-    pkgconfig pam libxcb glib libXdmcp itstool libxml2 intltool libxklavier libgcrypt
-  ] ++ stdenv.lib.optional doCheck dbus.daemon;
+    accountsservice
+    audit
+    glib
+    libgcrypt
+    libxcb
+    libXdmcp
+    libxklavier
+    pam
+    polkit
+  ] ++ optional withQt4 qt4
+    ++ optional withQt5 qtbase;
 
-  configureFlags = [ "--enable-liblightdm-gobject" "--localstatedir=/var" ];
+  patches = [ ./run-dir.patch ];
 
-  doCheck = false; # some tests fail, don't know why
+  preConfigure = "NOCONFIGURE=1 ./autogen.sh";
+
+  configureFlags = [
+    "--localstatedir=/var"
+    "--sysconfdir=/etc"
+    "--disable-tests"
+    "--disable-static"
+  ] ++ optional withQt4 "--enable-liblightdm-qt"
+    ++ optional withQt5 "--enable-liblightdm-qt5";
+
+  installFlags = [
+    "sysconfdir=\${out}/etc"
+    "localstatedir=\${TMPDIR}"
+  ];
+
+  prePatch = ''
+    substituteInPlace autogen.sh \
+      --replace "which" "${busybox}/bin/which"
+
+    substituteInPlace src/shared-data-manager.c \
+      --replace /bin/rm ${busybox}/bin/rm
+  '';
 
   meta = {
-    homepage = http://launchpad.net/lightdm;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.ocharles ];
+    homepage = https://github.com/CanonicalLtd/lightdm;
+    description = "A cross-desktop display manager.";
+    platforms = platforms.linux;
+    license = licenses.gpl3;
+    maintainers = with maintainers; [ ocharles wkennington worldofpeace ];
   };
 }

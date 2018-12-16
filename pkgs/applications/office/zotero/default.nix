@@ -1,44 +1,67 @@
-{ stdenv, fetchurl, bash, xulrunner }:
-
-assert (stdenv.system == "x86_64-linux" || stdenv.system == "i686-linux");
+{ stdenv, fetchurl, buildFHSUserEnv, makeDesktopItem, runCommand, bash, wrapGAppsHook, gsettings-desktop-schemas, gtk3, gnome3 }:
 
 let
-  version = "4.0.23";
-  arch = if stdenv.system == "x86_64-linux"
-           then "linux-x86_64"
-           else "linux-i686";
-in
-stdenv.mkDerivation {
-  name = "zotero-${version}";
+version = "5.0.35.1";
+meta = with stdenv.lib; {
+  homepage = https://www.zotero.org;
+  description = "Collect, organize, cite, and share your research sources";
+  license = licenses.agpl3;
+  platforms = platforms.linux;
+};
+
+zoteroSrc = stdenv.mkDerivation rec {
+  inherit version;
+  name = "zotero-${version}-pkg";
 
   src = fetchurl {
-    url = "https://download.zotero.org/standalone/${version}/Zotero-${version}_${arch}.tar.bz2";
-    sha256 = if stdenv.system == "x86_64-linux"
-               then "1fz5xn69vapfw8d20207zr9p5r1h9x5kahh334pl2dn1h8il0sm8"
-               else "1kmsvvg2lh881rzy3rxbigzivixjamyrwf5x7vmn1kzhvsvifrng";
+    url = "https://download.zotero.org/client/release/${version}/Zotero-${version}_linux-x86_64.tar.bz2";
+    sha256 = "0d2imvp84svllrnja1dl4nldp634z632g5xkm2q9v7j3dwbzw1hw";
   };
 
-  # Strip the bundled xulrunner
-  prePatch = ''rm -fr run-zotero.sh zotero xulrunner/'';
+  buildInputs= [ wrapGAppsHook gsettings-desktop-schemas gtk3 gnome3.adwaita-icon-theme gnome3.dconf ];
+  phases = [ "unpackPhase" "installPhase" "fixupPhase"];
 
-  inherit bash xulrunner;
   installPhase = ''
-    mkdir -p "$out/libexec/zotero"
-    cp -vR * "$out/libexec/zotero/"
-
-    mkdir -p "$out/bin"
-    substituteAll "${./zotero.sh}" "$out/bin/zotero"
-    chmod +x "$out/bin/zotero"
+    mkdir -p $out/data
+    cp -r * $out/data
+    mkdir $out/bin
+    ln -s $out/data/zotero $out/bin/zotero
   '';
+};
 
-  doInstallCheck = true;
-  installCheckPhase = "$out/bin/zotero --version";
+fhsEnv = buildFHSUserEnv {
+  name = "zotero-fhs-env";
+  targetPkgs = pkgs: with pkgs; with xorg; [
+    gtk3 dbus-glib
+    libXt nss
+    libX11
+  ];
+};
 
-  meta = with stdenv.lib; {
-    homepage = "https://www.zotero.org";
-    description = "Collect, organize, cite, and share your research sources";
-    license = licenses.agpl3;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ ttuegel ];
-  };
-}
+desktopItem = makeDesktopItem rec {
+  name = "zotero-${version}";
+  exec = "zotero -url %U";
+  icon = "zotero";
+  type = "Application";
+  comment = meta.description;
+  desktopName = "Zotero";
+  genericName = "Reference Management";
+  categories = "Office;Database;";
+  startupNotify = "true";
+};
+
+in runCommand "zotero-${version}" { inherit meta; } ''
+  mkdir -p $out/bin $out/share/applications
+  cat >$out/bin/zotero <<EOF
+#!${bash}/bin/bash
+${fhsEnv}/bin/zotero-fhs-env ${zoteroSrc}/bin/zotero
+EOF
+  chmod +x $out/bin/zotero
+
+  cp ${desktopItem}/share/applications/* $out/share/applications/
+
+  for size in 16 32 48 256; do
+    install -Dm444 ${zoteroSrc}/data/chrome/icons/default/default$size.png \
+      $out/share/icons/hicolor/''${size}x''${size}/apps/zotero.png
+  done
+''

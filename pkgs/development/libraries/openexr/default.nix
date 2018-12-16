@@ -1,18 +1,36 @@
-{ stdenv, fetchurl, pkgconfig, zlib, ctl, ilmbase }:
+{ lib, stdenv, fetchurl, autoconf, automake, libtool, pkgconfig, zlib, ilmbase }:
 
 stdenv.mkDerivation rec {
-  name = "openexr-1.7.1";
-  
+  name = "openexr-${version}";
+  version = lib.getVersion ilmbase;
+
   src = fetchurl {
-    url = "mirror://savannah/openexr/${name}.tar.gz";
-    sha256 = "0l2rdbx9lg4qk2ms98hwbsnzpggdrx3pbjl6pcvrrpjqp5m905n6";
+    url = "https://github.com/openexr/openexr/releases/download/v${version}/${name}.tar.gz";
+    sha256 = "19jywbs9qjvsbkvlvzayzi81s976k53wg53vw4xj66lcgylb6v7x";
   };
-  
-  buildInputs = [ pkgconfig ctl ];
-  
-  propagatedBuildInputs = [ zlib ilmbase ];
-  
-  configureFlags = "--enable-imfexamples";
-  
-  patches = [ ./stringh.patch ];
+
+  patches = [
+    ./bootstrap.patch
+  ];
+
+  outputs = [ "bin" "dev" "out" "doc" ];
+
+  preConfigure = ''
+    patchShebangs ./bootstrap
+    ./bootstrap
+  '';
+
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ autoconf automake libtool ];
+  propagatedBuildInputs = [ ilmbase zlib ];
+
+  enableParallelBuilding = true;
+  doCheck = false; # fails 1 of 1 tests
+
+  meta = with stdenv.lib; {
+    homepage = http://www.openexr.com/;
+    license = licenses.bsd3;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ wkennington ];
+  };
 }

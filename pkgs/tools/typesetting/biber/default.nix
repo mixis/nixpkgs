@@ -1,40 +1,37 @@
-{ stdenv, fetchurl, buildPerlPackage, autovivification, BusinessISBN
-, BusinessISMN, BusinessISSN, ConfigAutoConf, DataCompare, DataDump, DateSimple
-, EncodeEUCJPASCII, EncodeHanExtra, EncodeJIS2K, ExtUtilsLibBuilder
-, FileSlurp, IPCRun3, Log4Perl, LWPProtocolHttps, ListAllUtils, ListMoreUtils
-, ModuleBuild, MozillaCA, ReadonlyXS, RegexpCommon, TextBibTeX, UnicodeCollate
-, UnicodeLineBreak, URI, XMLLibXMLSimple, XMLLibXSLT, XMLWriter }:
+{ stdenv, fetchFromGitHub, perlPackages }:
 
-let
-  version = "1.9";
-  pn = "biblatex-biber";
-in
-buildPerlPackage {
+# builds but doesn't work with perl 5.24, see discussion in #40826
+# TODO: build with perl >=5.26 and try to enable tests
+
+perlPackages.buildPerlModule rec {
   name = "biber-${version}";
-  src = fetchurl {
-    url = "mirror://sourceforge/project/${pn}/${pn}/${version}/${pn}.tar.gz";
-    sha256 = "1a3iq7l9i54f8nfzjmp1qdb6aqm7977q1g4san470010fkfbvjdc";
+  version = "2.11";
+
+  src = fetchFromGitHub {
+    owner = "plk";
+    repo = "biber";
+    rev = "v${version}";
+    sha256 = "0qgkc1k9n36yfmndwz879pak6mjphld0p85lzn9g2ng0vhxsifzz";
   };
 
-  buildInputs = [
+  buildInputs = with perlPackages; [
     autovivification BusinessISBN BusinessISMN BusinessISSN ConfigAutoConf
     DataCompare DataDump DateSimple EncodeEUCJPASCII EncodeHanExtra EncodeJIS2K
-    ExtUtilsLibBuilder FileSlurp IPCRun3 Log4Perl LWPProtocolHttps ListAllUtils
-    ListMoreUtils ModuleBuild MozillaCA ReadonlyXS RegexpCommon TextBibTeX
+    DateTime DateTimeFormatBuilder DateTimeCalendarJulian
+    ExtUtilsLibBuilder FileSlurper FileWhich IPCRun3 LogLog4perl LWPProtocolHttps ListAllUtils
+    ListMoreUtils MozillaCA ReadonlyXS RegexpCommon TextBibTeX
     UnicodeCollate UnicodeLineBreak URI XMLLibXMLSimple XMLLibXSLT XMLWriter
+    ClassAccessor TextCSV TextCSV_XS TextRoman DataUniqid LinguaTranslit UnicodeNormalize SortKey
+    TestDifferences
   ];
-  preConfigure = "touch Makefile.PL";
-  buildPhase = "perl Build.PL --prefix=$out; ./Build build";
-  checkPhase = "./Build test";
-  installPhase = "./Build install";
 
-  # Tests seem to be broken
+  # Tests depend on the precise Unicode-Collate version (expects 1.19, but we have 1.25)
   doCheck = false;
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Backend for BibLaTeX";
-    license = "perl";
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.ttuegel ];
+    license = with licenses; [ artistic1 gpl1Plus ];
+    platforms = platforms.unix;
+    maintainers = [ maintainers.ttuegel ];
   };
 }

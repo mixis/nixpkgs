@@ -7,10 +7,6 @@ args@{ name, src, platformVersions ? [ "8" ], useGoogleAPIs ? false, antFlags ? 
 assert release -> keyStore != null && keyAlias != null && keyStorePassword != null && keyAliasPassword != null;
 
 let
-  platformName = if stdenv.system == "i686-linux" || stdenv.system == "x86_64-linux" then "linux"
-    else if stdenv.system == "x86_64-darwin" then "macosx"
-    else throw "Platform: ${stdenv.system} is not supported!";
-
   androidsdkComposition = androidsdk {
     inherit platformVersions useGoogleAPIs;
     abiVersions = [];
@@ -19,7 +15,7 @@ in
 stdenv.mkDerivation ({
   name = stdenv.lib.replaceChars [" "] [""] name;
 
-  ANDROID_HOME = "${androidsdkComposition}/libexec/android-sdk-${platformName}";
+  ANDROID_HOME = "${androidsdkComposition}/libexec";
 
   buildInputs = [ jdk ant ] ++
     stdenv.lib.optional useNDK [ androidndk gnumake gawk file which ];
@@ -39,7 +35,7 @@ stdenv.mkDerivation ({
     ${if useNDK then ''
         export GNUMAKE=${gnumake}/bin/make
         export NDK_HOST_AWK=${gawk}/bin/gawk
-        ${androidndk}/ndk-build
+        ${androidndk}/bin/ndk-build
       '' else ""}
     ant ${antFlags} ${if release then "release" else "debug"}
   '';

@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
   name    = "p0f-${version}";
-  version = "3.07b";
+  version = "3.09b";
 
   src = fetchurl {
     url    = "http://lcamtuf.coredump.cx/p0f3/releases/${name}.tgz";
-    sha256 = "18hbkwvh8maswhka0cyq0rwznz8yacnf4h1jmvb8krz0695rmz2w";
+    sha256 = "0zqfq3gdnha29ckvlqmyp36c0jhj7f69bhqqx31yb6vkirinhfsl";
   };
 
   buildInputs = [ libpcap ];
@@ -28,6 +28,8 @@ stdenv.mkDerivation rec {
     cp ./tools/p0f-sendsyn  $out/sbin
     cp ./tools/p0f-sendsyn6 $out/sbin
   '';
+
+  hardeningDisable = [ "format" ];
 
   meta = {
     description = "Passive network reconnaissance and fingerprinting tool";

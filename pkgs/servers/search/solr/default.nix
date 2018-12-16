@@ -1,30 +1,35 @@
-{ stdenv, fetchurl }:
+{ stdenv, fetchurl, jre, makeWrapper }:
 
 stdenv.mkDerivation rec {
   name = "solr-${version}";
-  version = "4.7.0";
+  version = "7.5.0";
 
   src = fetchurl {
     url = "mirror://apache/lucene/solr/${version}/solr-${version}.tgz";
-    sha256 = "0qm3pnhpfqjxdl0xiwffrcchp79q3ja5w5d278bkkxglc2y1y4xc";
+    sha256 = "1g6f58j2pzb73phj4hfri9mj7vmql72by7w3xrbq1pbnqgzxmhpa";
   };
 
-  phases = [ "unpackPhase" "installPhase" ];
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
-    mkdir -p $out/lib
-    cp dist/${name}.war $out/lib/solr.war
-    cp -r example/lib/ext $out/lib/ext
+    mkdir -p $out $out/bin
+
+    cp -r bin/solr bin/post $out/bin/
+    cp -r contrib $out/
+    cp -r dist $out/
+    cp -r example $out/
+    cp -r server $out/
+
+    wrapProgram $out/bin/solr --set JAVA_HOME "${jre}"
+    wrapProgram $out/bin/post --set JAVA_HOME "${jre}"
   '';
 
-  meta = {
-    homepage = "https://lucene.apache.org/solr/";
-    description = ''
-      Open source enterprise search platform from the Apache Lucene project
-    '';
-    license = stdenv.lib.licenses.asl20;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.rickynils ];
+  meta = with stdenv.lib; {
+    homepage = https://lucene.apache.org/solr/;
+    description = "Open source enterprise search platform from the Apache Lucene project";
+    license = licenses.asl20;
+    platforms = platforms.all;
+    maintainers = [ maintainers.rickynils maintainers.domenkozar maintainers.aanderse ];
   };
 
 }

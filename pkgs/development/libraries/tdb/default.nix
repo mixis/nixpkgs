@@ -1,16 +1,30 @@
-{ fetchurl, stdenv, libxslt, libxml2, docbook_xsl }:
+{ stdenv, fetchurl, python, pkgconfig, readline, libxslt
+, docbook_xsl, docbook_xml_dtd_42
+}:
 
 stdenv.mkDerivation rec {
-  name = "tdb-1.2.1";
+  name = "tdb-1.3.16";
 
   src = fetchurl {
-    url = "http://samba.org/ftp/tdb/${name}.tar.gz";
-    sha256 = "1yndfc2hn28v78vgvrds7cjggmmhf9q5dcfklgdfvpsx9j9knhpg";
+    url = "mirror://samba/tdb/${name}.tar.gz";
+    sha256 = "1ibcz466xwk1x6xvzlgzd5va4lyrjzm3rnjak29kkwk7cmhw4gva";
   };
 
-  buildInputs = [ libxslt libxml2 docbook_xsl ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [
+    python readline libxslt docbook_xsl docbook_xml_dtd_42
+  ];
 
-  meta = {
+  preConfigure = ''
+    sed -i 's,#!/usr/bin/env python,#!${python}/bin/python,g' buildtools/bin/waf
+  '';
+
+  configureFlags = [
+    "--bundled-libraries=NONE"
+    "--builtin-libraries=replace"
+  ];
+
+  meta = with stdenv.lib; {
     description = "The trivial database";
     longDescription =
       '' TDB is a Trivial Database. In concept, it is very much like GDBM,
@@ -18,11 +32,9 @@ stdenv.mkDerivation rec {
          uses locking internally to keep writers from trampling on each
          other.  TDB is also extremely small.
       '';
-
-    homepage = http://tdb.samba.org/;
-    license = stdenv.lib.licenses.lgpl3Plus;
-
-    maintainers = [ ];
-    platforms = stdenv.lib.platforms.all;
+    homepage = https://tdb.samba.org/;
+    license = licenses.lgpl3Plus;
+    maintainers = with maintainers; [ wkennington ];
+    platforms = platforms.all;
   };
 }

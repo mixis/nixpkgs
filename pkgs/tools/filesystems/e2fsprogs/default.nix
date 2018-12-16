@@ -1,34 +1,54 @@
-{ stdenv, fetchurl, pkgconfig, libuuid }:
+{ stdenv, buildPackages, fetchurl, fetchpatch, pkgconfig, libuuid, gettext, texinfo, perl }:
 
 stdenv.mkDerivation rec {
-  name = "e2fsprogs-1.42.12";
+  name = "e2fsprogs-1.44.4";
 
   src = fetchurl {
     url = "mirror://sourceforge/e2fsprogs/${name}.tar.gz";
-    sha256 = "0v0qcfyls0dlrjy8gx9m3s2wbkp5z3lbsr5hb7x8kp8f3bclcy71";
+    sha256 = "1cnwfmv9r7s73xhgghqspjq593pc4qghh80wjd0kjdgwy247cw6x";
   };
 
-  buildInputs = [ pkgconfig libuuid ];
+  outputs = [ "bin" "dev" "out" "man" "info" ];
 
-  crossAttrs = {
-    preConfigure = ''
-      export CC=$crossConfig-gcc
-    '';
-  };
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ pkgconfig texinfo ];
+  buildInputs = [ libuuid gettext ];
 
-  # libuuid, libblkid, uuidd and fsck are in util-linux-ng (the "libuuid" dependency).
-  configureFlags = "--enable-elf-shlibs --disable-libuuid --disable-libblkid --disable-uuidd --disable-fsck --enable-symlink-install";
+  # Only use glibc's __GNUC_PREREQ(X,Y) (checks if compiler is gcc version >= X.Y) when using glibc
+  patches = if stdenv.hostPlatform.libc == "glibc" then null
+    else [
+      (fetchpatch {
+      url = "https://raw.githubusercontent.com/void-linux/void-packages/1f3b51493031cc0309009804475e3db572fc89ad/srcpkgs/e2fsprogs/patches/fix-glibcism.patch";
+      sha256 = "1q7y8nhsfwl9r1q7nhrlikazxxj97p93kgz5wh7723cshlji2vaa";
+      extraPrefix = "";
+      })
+    ];
+
+  configureFlags =
+    if stdenv.isLinux then [
+      "--enable-elf-shlibs" "--enable-symlink-install" "--enable-relative-symlinks"
+      # libuuid, libblkid, uuidd and fsck are in util-linux-ng (the "libuuid" dependency).
+      "--disable-libuuid" "--disable-uuidd" "--disable-libblkid" "--disable-fsck"
+    ] else [
+      "--enable-libuuid --disable-e2initrd-helper"
+    ];
+
+  checkInputs = [ perl ];
+  doCheck = false; # fails
+
+  # hacky way to make it install *.pc
+  postInstall = ''
+    make install-libs
+    rm "$out"/lib/*.a
+  '';
 
   enableParallelBuilding = true;
 
-  preInstall = "installFlagsArray=('LN=ln -s')";
-
-  postInstall = "make install-libs";
-
-  meta = {
+  meta = with stdenv.lib; {
     homepage = http://e2fsprogs.sourceforge.net/;
     description = "Tools for creating and checking ext2/ext3/ext4 filesystems";
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
+    license = licenses.gpl2;
+    platforms = platforms.linux;
+    maintainers = [ maintainers.eelco ];
   };
 }

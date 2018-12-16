@@ -1,21 +1,47 @@
-{ stdenv, fetchurl, perl, cmake, vala, pkgconfig, gobjectIntrospection, glib, gtk3, gnome3, gettext }:
+{ stdenv, fetchFromGitHub, cmake, ninja, vala_0_40, pkgconfig, gobject-introspection, gnome3, gtk3, glib, gettext }:
 
 stdenv.mkDerivation rec {
-  majorVersion = "0.3";
-  minorVersion = "0";
-  name = "granite-${majorVersion}.${minorVersion}";
-  src = fetchurl {
-    url = "https://code.launchpad.net/granite/${majorVersion}/${majorVersion}/+download/${name}.tar.gz";
-    sha256 = "1laa109dz7kbd8zxddqw2p1b67yzva7cc5h3smqkj8a9jzbhv5fz";
+  pname = "granite";
+  version = "5.2.1";
+
+  name = "${pname}-${version}";
+
+  src = fetchFromGitHub {
+    owner = "elementary";
+    repo = pname;
+    rev = version;
+    sha256 = "18rw1lv6zk5w2cq8bv6b869z3cdikn9gzk30gw1s9f8n06bh737h";
   };
-  cmakeFlags = "-DINTROSPECTION_GIRDIR=share/gir-1.0/ -DINTROSPECTION_TYPELIBDIR=lib/girepository-1.0";
-  buildInputs = [perl cmake vala pkgconfig gobjectIntrospection glib gtk3 gnome3.libgee gettext];
-  meta = {
+
+  cmakeFlags = [
+    "-DINTROSPECTION_GIRDIR=share/gir-1.0/"
+    "-DINTROSPECTION_TYPELIBDIR=lib/girepository-1.0"
+  ];
+
+  nativeBuildInputs = [
+    cmake
+    gettext
+    gobject-introspection
+    ninja
+    pkgconfig
+    vala_0_40 # should be `elementary.vala` when elementary attribute set is merged
+  ];
+
+  buildInputs = [
+    glib
+    gnome3.libgee
+    gtk3
+  ];
+
+  meta = with stdenv.lib; {
     description = "An extension to GTK+ used by elementary OS";
-    longDescription = "An extension to GTK+ that provides several useful widgets and classes to ease application development. Designed for elementary OS.";
-    homepage = https://launchpad.net/granite;
-    license = stdenv.lib.licenses.lgpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.vozz ];
+    longDescription = ''
+      Granite is a companion library for GTK+ and GLib. Among other things, it provides complex widgets and convenience functions
+      designed for use in apps built for elementary OS.
+    '';
+    homepage = https://github.com/elementary/granite;
+    license = licenses.lgpl3Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ vozz worldofpeace ];
   };
 }

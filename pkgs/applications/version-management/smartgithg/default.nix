@@ -1,64 +1,64 @@
 { stdenv, fetchurl, lib, makeWrapper
 , jre
-, gtk, glib
+, gtk2, glib
 , libXtst
-, git, mercurial, subversion
 , which
 }:
 
-let
-  the_version = "6_0_6";
-
-in
-
 stdenv.mkDerivation rec {
-  name = "smartgithg-${the_version}";
+  name = "smartgithg-${version}";
+  version = "18_1_5";
 
   src = fetchurl {
-    url = "http://www.syntevo.com/download/smartgithg/" +
-          "smartgithg-generic-${the_version}.tar.gz";
-    sha256 = "13e41560138ef18395fbe0bf56d4d29e8614eee004d51d7dd03381080d8426e6";
+    url = "https://www.syntevo.com/downloads/smartgit/smartgit-linux-${version}.tar.gz";
+    sha256 = "0f2aj3259jvn7n0x6m8sbwliikln9lqffd00jg75dblhxwl8adg3";
   };
 
-  buildInputs = [
-    makeWrapper
-    jre
-  ];
+  nativeBuildInputs = [ makeWrapper ];
+
+  buildInputs = [ jre ];
 
   buildCommand = let
     pkg_path = "$out/${name}";
     bin_path = "$out/bin";
-    runtime_paths = lib.makeSearchPath "bin" [
+    install_freedesktop_items = ./install_freedesktop_items.sh;
+    runtime_paths = lib.makeBinPath [
       jre
-      git mercurial subversion
+      #git mercurial subversion # the paths are requested in configuration
       which
     ];
     runtime_lib_paths = lib.makeLibraryPath [
-      gtk glib
+      gtk2 glib
       libXtst
     ];
   in ''
     tar xvzf $src
     mkdir -pv $out
-    # unpacking should have produced a dir named ${name}
-    cp -a ${name} $out
+    mkdir -pv ${pkg_path}
+    # unpacking should have produced a dir named 'smartgit'
+    cp -a smartgit/* ${pkg_path}
+    # prevent using packaged jre
+    rm -r ${pkg_path}/jre
     mkdir -pv ${bin_path}
-    [ -d ${jre}/lib/openjdk ] \
-      && jre=${jre}/lib/openjdk \
-      || jre=${jre}
-    makeWrapper ${pkg_path}/bin/smartgithg.sh ${bin_path}/smartgithg \
+    jre=${jre.home}
+    makeWrapper ${pkg_path}/bin/smartgit.sh ${bin_path}/smartgit \
       --prefix PATH : ${runtime_paths} \
       --prefix LD_LIBRARY_PATH : ${runtime_lib_paths} \
       --prefix JRE_HOME : ${jre} \
       --prefix JAVA_HOME : ${jre} \
       --prefix SMARTGITHG_JAVA_HOME : ${jre}
+    sed -i '/ --login/d' ${pkg_path}/bin/smartgit.sh
     patchShebangs $out
+    cp ${bin_path}/smartgit ${bin_path}/smartgithg
+
+    ${install_freedesktop_items} "${pkg_path}/bin" "$out"
   '';
 
   meta = with stdenv.lib; {
     description = "GUI for Git, Mercurial, Subversion";
-    homepage = http://www.syntevo.com/smartgithg/;
+    homepage = http://www.syntevo.com/smartgit/;
     license = licenses.unfree;
     platforms = platforms.linux;
+    maintainers = with stdenv.lib.maintainers; [ jraygauthier ];
   };
 }

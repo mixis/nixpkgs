@@ -3,19 +3,28 @@
 
 stdenv.mkDerivation rec {
   baseName="pure";
-  project="pure-lang";
-  version="0.62";
+  version="0.68";
   name="${baseName}-${version}";
-  extension="tar.gz";
 
   src = fetchurl {
-    url="https://bitbucket.org/purelang/${project}/downloads/${name}.${extension}";
-    sha256="77df64e8154ef6f8fac66f8bcc471dc8f994862d1ee77b7c98003607757a013b";
+    url="https://github.com/agraef/pure-lang/releases/download/${name}/${name}.tar.gz";
+    sha256="0px6x5ivcdbbp2pz5n1r1cwg1syadklhjw8piqhl63n91i4r7iyb";
   };
 
   buildInputs = [ bison flex makeWrapper ];
   propagatedBuildInputs = [ llvm gmp mpfr readline ];
 
+  postPatch = ''
+    for f in expr.cc matcher.cc printer.cc symtable.cc parserdefs.hh; do
+      sed -i '1i\#include <stddef.h>' $f
+    done
+  '';
+
+  configureFlags = [ "--enable-release" ];
+  doCheck = true;
+  checkPhase = ''
+    LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${llvm}/lib make check
+  '';
   postInstall = ''
     wrapProgram $out/bin/pure --prefix LD_LIBRARY_PATH : ${llvm}/lib
   '';
@@ -25,6 +34,7 @@ stdenv.mkDerivation rec {
     maintainers = with lib.maintainers;
     [
       raskin
+      asppsa
     ];
     platforms = with lib.platforms;
       linux;

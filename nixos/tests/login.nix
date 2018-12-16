@@ -2,9 +2,12 @@ import ./make-test.nix ({ pkgs, latestKernel ? false, ... }:
 
 {
   name = "login";
+  meta = with pkgs.stdenv.lib.maintainers; {
+    maintainers = [ eelco chaoflow ];
+  };
 
   machine =
-    { config, pkgs, lib, ... }:
+    { pkgs, lib, ... }:
     { boot.kernelPackages = lib.mkIf latestKernel pkgs.linuxPackages_latest;
     };
 
@@ -30,10 +33,11 @@ import ./make-test.nix ({ pkgs, latestKernel ? false, ... }:
 
       # Log in as alice on a virtual console.
       subtest "virtual console login", sub {
-          $machine->sleep(2); # urgh: wait for username prompt
+          $machine->waitUntilTTYMatches(2, "login: ");
           $machine->sendChars("alice\n");
+          $machine->waitUntilTTYMatches(2, "login: alice");
           $machine->waitUntilSucceeds("pgrep login");
-          $machine->sleep(2); # urgh: wait for `Password:'
+          $machine->waitUntilTTYMatches(2, "Password: ");
           $machine->sendChars("foobar\n");
           $machine->waitUntilSucceeds("pgrep -u alice bash");
           $machine->sendChars("touch done\n");

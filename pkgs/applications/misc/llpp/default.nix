@@ -1,75 +1,48 @@
-{ stdenv, fetchgit, ocaml, mupdf, lablgl, mesa
-, libX11, libXext, gtk3, freetype, zlib, openjpeg
-, jbig2dec, libjpeg, ncurses }:
+{ stdenv, lib, makeWrapper, fetchgit, pkgconfig, ninja, ocaml, findlib, mupdf
+, gtk3, openjpeg, jbig2dec, mujs, xsel, openssl, freetype, ncurses }:
 
-stdenv.mkDerivation {
-  name = "llpp-2014-05-26";
+assert lib.versionAtLeast (lib.getVersion ocaml) "4.02";
+
+stdenv.mkDerivation rec {
+  name = "llpp-${version}";
+  version = "2018-03-02";
 
   src = fetchgit {
     url = "git://repo.or.cz/llpp.git";
-    rev  = "902143de64d86b5714b3a59d2cc7085083b87249";
-    sha256 = "038xl4gbvm57na2lz1fw36sf43zaxq407zi2d53985vc33677j9s";
+    rev = "0ab1fbbf142b6df6d6bae782e3af2ec50f32dec9";
+    sha256 = "1h0hrmxwm7ripgp051788p8ad0q38dc9nvjx87mdwlkwk9qc0dis";
+    fetchSubmodules = false;
   };
 
-  buildInputs = [ ocaml mupdf lablgl mesa libX11 libXext gtk3
-                  freetype jbig2dec libjpeg openjpeg zlib ncurses ];
+  nativeBuildInputs = [ pkgconfig makeWrapper ninja ];
+  buildInputs = [ ocaml findlib mupdf gtk3 jbig2dec openjpeg mujs openssl freetype ncurses ];
 
-  # The build phase was extracted from buildall.sh, because that script
-  # fetched the dependencies on its own.
-  buildPhase = ''
-    ccopt="-O"
-    ccopt="$ccopt -I ${jbig2dec}/include"
-    ccopt="$ccopt -I ${libjpeg}/include"
-    ccopt="$ccopt -I ${freetype}/include/freetype2"
-    ccopt="$ccopt -I ${openjpeg}/include"
-    ccopt="$ccopt -I ${zlib}/include"
-    ccopt="$ccopt -I ${mupdf}/include"
-    ccopt="$ccopt -include ft2build.h"
-    ccopt="$ccopt -D_GNU_SOURCE"
-
-    cclib="$cclib -lmupdf"
-    cclib="$cclib -lz -ljpeg -lopenjp2 -ljbig2dec -lfreetype -lpthread"
-    cclib="$cclib -lX11"
-    cclib="$cclib -lfreetype"
-
-    comp=ocamlc.opt
-    cmsuf=cmo
-
-    sh mkhelp.sh keystoml.ml KEYS > help.ml
-
-    $comp -c -o link.o -ccopt "$ccopt" link.c
-    $comp -c -o help.$cmsuf help.ml
-    $comp -c -o utils.$cmsuf utils.ml
-    $comp -c -o wsi.cmi wsi.mli
-    $comp -c -o wsi.$cmsuf wsi.ml
-    $comp -c -o parser.$cmsuf parser.ml
-    $comp -c -o main.$cmsuf -I ${lablgl}/lib/ocaml/4.01.0/site-lib/lablgl main.ml
-
-    $comp -custom -o llpp           \
-          -I ${lablgl}/lib/ocaml/4.01.0/site-lib/lablgl \
-          str.cma unix.cma lablgl.cma \
-          link.o                      \
-          -cclib "$cclib"             \
-          help.cmo                    \
-          utils.cmo                   \
-          parser.cmo                  \
-          wsi.cmo                     \
-          main.cmo
-  '';
-
-  # Binary fails with 'No bytecode file specified.' if stripped.
   dontStrip = true;
 
-  installPhase = ''
-    install -d $out/bin
-    install llpp llppac $out/bin
+  configurePhase = ''
+    sed -i -e 's+ocamlc --version+ocamlc -version+' build.sh
+    sed -i -e 's+-I \$srcdir/mupdf/include -I \$srcdir/mupdf/thirdparty/freetype/include+-I ${freetype.dev}/include+' build.sh
+    sed -i -e 's+-lmupdf +-lfreetype -lz -lharfbuzz -ljbig2dec -lopenjp2 -ljpeg -lmupdf +' build.sh
+    sed -i -e 's+-L\$srcdir/mupdf/build/native ++' build.sh
   '';
 
-  meta = {
-    homepage = http://repo.or.cz/w/llpp.git;
+  buildPhase = ''
+    sh ./build.sh build
+  '';
+
+  installPhase = ''
+    install -d $out/bin $out/lib
+    install build/llpp $out/bin
+    wrapProgram $out/bin/llpp \
+        --prefix CAML_LD_LIBRARY_PATH ":" "$out/lib" \
+        --prefix PATH ":" "${xsel}/bin"
+  '';
+
+  meta = with stdenv.lib; {
+    homepage = https://repo.or.cz/w/llpp.git;
     description = "A MuPDF based PDF pager written in OCaml";
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.pSub ];
-    license = "GPL";
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ pSub ];
+    license = licenses.gpl3;
   };
 }

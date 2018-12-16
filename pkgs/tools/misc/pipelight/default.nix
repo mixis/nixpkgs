@@ -1,73 +1,37 @@
-{ stdenv, fetchurl, fetchgit, autoconf, automake, wineUnstable, perl, xlibs
-  , gnupg, gcc48_multi, mesa, curl, bash, cacert, cabextract, utillinux, attr
-  }:
+{ stdenv, fetchurl, bash, cabextract, curl, gnupg, libX11, libGLU_combined, wine-staging }:
 
 let
-  wine_patches_version = "1.7.28";
-  wine_hash = "04r3zk3dz2vzly2a4nqbcvppjs5iy3lq5ibx3wfrf877p5bz3hv7";
-
-  wine_patches = fetchgit {
-    url = "git://github.com/compholio/wine-compholio.git";
-    rev = "refs/tags/v${wine_patches_version}";
-    sha256 = "17f1wmxbx6ly1ws4p528ijf9b4yvmnmap5k7npw9icvkyaky5xi9";
-  };
-
-  wine_custom =
-    stdenv.lib.overrideDerivation wineUnstable (args: rec {
-      name = "wine-${wine_patches_version}";
-      version = "${wine_patches_version}";
-      src = null;
-      srcs = [
-	      (fetchurl {
-                url = "mirror://sourceforge/wine/${name}.tar.bz2";
-                sha256 = wine_hash;
-	      })
-	      wine_patches ];
-      sourceRoot = "./${name}";
-      buildInputs = args.buildInputs ++ [ 
-        autoconf perl utillinux automake attr 
-      ];
-      nativeBuildInputs = args.nativeBuildInputs ++ [ 
-        autoconf perl utillinux automake attr 
-      ];
-      postPatch = ''
-        export wineDir=$(pwd)
-        patchShebangs $wineDir/tools/
-	chmod u+w $wineDir/../git-export/debian/tools/
-        patchShebangs $wineDir/../git-export/debian/tools/
-        chmod -R +rwx ../git-export/
-        make -C ../git-export/patches DESTDIR=$wineDir install
-      '';
-    });
+  wine_custom = wine-staging;
 
   mozillaPluginPath = "/lib/mozilla/plugins";
 
 
 in stdenv.mkDerivation rec {
 
-  version = "0.2.7.2";
+  version = "0.2.8.2";
 
   name = "pipelight-${version}";
 
   src = fetchurl {
     url = "https://bitbucket.org/mmueller2012/pipelight/get/v${version}.tar.gz";
-    sha256 = "02132151091f1f62d7409a537649efc86deb0eb4a323fd66907fc22947e2cfbd";
+    sha256 = "1kyy6knkr42k34rs661r0f5sf6l1s2jdbphdg89n73ynijqmzjhk";
   };
 
-  buildInputs = [ wine_custom xlibs.libX11 gcc48_multi mesa curl ];
+  buildInputs = [ wine_custom libX11 libGLU_combined curl ];
+
   propagatedbuildInputs = [ curl cabextract ];
 
   patches = [ ./pipelight.patch ];
 
   configurePhase = ''
-    patchShebangs . 
+    patchShebangs .
     ./configure \
       --prefix=$out \
       --moz-plugin-path=$out/${mozillaPluginPath} \
       --wine-path=${wine_custom} \
-      --gpg-exec=${gnupg}/bin/gpg2 \
+      --gpg-exec=${gnupg}/bin/gpg \
       --bash-interp=${bash}/bin/bash \
-      --downloader=${curl}/bin/curl
+      --downloader=${curl.bin}/bin/curl
       $configureFlags
   '';
 
@@ -88,10 +52,10 @@ in stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   meta = {
-    homepage = "http://pipelight.net/";
-    licenses = with stdenv.lib.licenses; [ mpl11 gpl2 lgpl21 ];
+    homepage = http://pipelight.net/;
+    license = with stdenv.lib.licenses; [ mpl11 gpl2 lgpl21 ];
     description = "A wrapper for using Windows plugins in Linux browsers";
-    maintainers = with stdenv.lib.maintainers; [skeidel];
-    platforms = with stdenv.lib.platforms; linux;
+    maintainers = with stdenv.lib.maintainers; [ skeidel ];
+    platforms = [ "x86_64-linux" "i686-linux" ];
   };
 }

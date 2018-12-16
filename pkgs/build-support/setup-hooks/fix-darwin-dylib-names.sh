@@ -1,4 +1,4 @@
-# On Mac OS X, binaries refer to dynamic library dependencies using
+# On macOS, binaries refer to dynamic library dependencies using
 # either relative paths (e.g. "libicudata.dylib", searched relative to
 # $DYLD_LIBRARY_PATH) or absolute paths
 # (e.g. "/nix/store/.../lib/libicudata.dylib").  In Nix, the latter is
@@ -9,6 +9,8 @@
 # not.  This setup hook fixes dylibs by setting their install names to
 # their absolute path (using "install_name_tool -id").  It also
 # rewrites references in other dylibs to absolute paths.
+
+fixupOutputHooks+=('fixDarwinDylibNamesIn $prefix')
 
 fixDarwinDylibNames() {
     local flags=()
@@ -28,8 +30,4 @@ fixDarwinDylibNames() {
 fixDarwinDylibNamesIn() {
     local dir="$1"
     fixDarwinDylibNames $(find "$dir" -name "*.dylib")
-}
-
-postFixup() {
-    fixDarwinDylibNamesIn "$prefix"
 }

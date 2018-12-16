@@ -1,14 +1,12 @@
 { fetchurl, stdenv, expect, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  name = "dejagnu-1.5.1";
+  name = "dejagnu-1.6.1";
 
   src = fetchurl {
     url = "mirror://gnu/dejagnu/${name}.tar.gz";
-    sha256 = "1lik8h4qi7x0mhsi8xmj91an1yb63rjbk6v4xrmzgiy5lk8lgrv0";
+    sha256 = "14hnq1mh91vqprc43xdy4f15sycw6fbajrh7zi6cw2kyg6xjhnxz";
   };
-
-  patches = [ ./wrapped-runtest-program-name.patch ];
 
   buildInputs = [ expect makeWrapper ];
 
@@ -20,7 +18,7 @@ stdenv.mkDerivation rec {
   # details.
 
   # The test-suite needs to have a non-empty stdin:
-  #   http://lists.gnu.org/archive/html/bug-dejagnu/2003-06/msg00002.html
+  #   https://lists.gnu.org/archive/html/bug-dejagnu/2003-06/msg00002.html
   checkPhase = ''
     # Provide `runtest' with a log name, otherwise it tries to run
     # `whoami', which fails when in a chroot.
@@ -32,7 +30,7 @@ stdenv.mkDerivation rec {
       --prefix PATH ":" "${expect}/bin"
   '';
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Framework for testing other programs";
 
     longDescription = ''
@@ -46,10 +44,10 @@ stdenv.mkDerivation rec {
       Tool command language.
     '';
 
-    homepage = http://www.gnu.org/software/dejagnu/;
-    license = stdenv.lib.licenses.gpl2Plus;
+    homepage = https://www.gnu.org/software/dejagnu/;
+    license = licenses.gpl2Plus;
 
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.ludo ];
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ wkennington vrthra ];
   };
 }

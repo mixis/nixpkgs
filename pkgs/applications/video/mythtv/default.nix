@@ -1,22 +1,37 @@
-{ stdenv, fetchurl, which, qt4, x11, pulseaudio, fftwSinglePrec
-, lame, zlib, mesa, alsaLib, freetype, perl, pkgconfig
-, libX11, libXv, libXrandr, libXvMC, libXinerama, libXxf86vm, libXmu
+{ stdenv, fetchFromGitHub, which, qtbase, qtwebkit, qtscript, xlibsWrapper
+, libpulseaudio, fftwSinglePrec , lame, zlib, libGLU_combined, alsaLib, freetype
+, perl, pkgconfig , libX11, libXv, libXrandr, libXvMC, libXinerama, libXxf86vm
+, libXmu , yasm, libuuid, taglib, libtool, autoconf, automake, file, exiv2
+, linuxHeaders
 }:
 
 stdenv.mkDerivation rec {
-  name = "mythtv-0.24.2";
+  name = "mythtv-${version}";
+  version = "29.1";
 
-  src = fetchurl {
-    url = "http://ftp.osuosl.org/pub/mythtv/${name}.tar.bz2";
-    sha256 = "14mkyf2b26pc9spx6lg15mml0nqyg1r3qnq8m9dz3110h771y2db";
+  src = fetchFromGitHub {
+    owner = "MythTV";
+    repo = "mythtv";
+    rev = "v${version}";
+    sha256 = "0pjxv4bmq8h285jsr02svgaa03614arsyk12fn9d4rndjsi2cc3x";
   };
 
+  setSourceRoot = ''sourceRoot=$(echo */mythtv)'';
+
   buildInputs = [
-    freetype qt4 lame zlib x11 mesa perl alsaLib pulseaudio fftwSinglePrec
-    libX11 libXv libXrandr libXvMC libXmu libXinerama libXxf86vm libXmu
+    freetype qtbase qtwebkit qtscript lame zlib xlibsWrapper libGLU_combined
+    perl alsaLib libpulseaudio fftwSinglePrec libX11 libXv libXrandr libXvMC
+    libXmu libXinerama libXxf86vm libXmu libuuid taglib exiv2
   ];
+  nativeBuildInputs = [ pkgconfig which yasm libtool autoconf automake file ];
 
-  nativeBuildInputs = [ pkgconfig which ];
+  configureFlags = [ "--dvb-path=${linuxHeaders}/include" ];
 
-  patches = [ ./settings.patch ];
+  meta = with stdenv.lib; {
+    homepage = https://www.mythtv.org/;
+    description = "Open Source DVR";
+    license = licenses.gpl2;
+    platforms = platforms.linux;
+    maintainers = [ maintainers.titanous ];
+  };
 }

@@ -1,9 +1,12 @@
 import ./make-test.nix ({ pkgs, ... }: {
   name = "trac";
+  meta = with pkgs.stdenv.lib.maintainers; {
+    maintainers = [ eelco chaoflow ];
+  };
 
   nodes = {
     storage =
-      { config, pkgs, ... }:
+      { ... }:
       { services.nfs.server.enable = true;
         services.nfs.server.exports = ''
           /repos 192.168.1.0/255.255.255.0(rw,no_root_squash)
@@ -12,9 +15,9 @@ import ./make-test.nix ({ pkgs, ... }: {
       };
 
     postgresql =
-      { config, pkgs, ... }:
+      { pkgs, ... }:
       { services.postgresql.enable = true;
-        services.postgresql.package = pkgs.postgresql92;
+        services.postgresql.package = pkgs.postgresql;
         services.postgresql.enableTCPIP = true;
         services.postgresql.authentication = ''
           # Generated file; do not edit!
@@ -26,7 +29,7 @@ import ./make-test.nix ({ pkgs, ... }: {
       };
 
     webserver =
-      { config, pkgs, ... }:
+      { pkgs, ... }:
       { fileSystems = pkgs.lib.mkVMOverride
           [ { mountPoint = "/repos";
               device = "storage:/repos";
@@ -40,9 +43,9 @@ import ./make-test.nix ({ pkgs, ... }: {
       };
 
     client =
-      { config, pkgs, ... }:
+      { ... }:
       { imports = [ ./common/x11.nix ];
-        services.xserver.desktopManager.kde4.enable = true;
+        services.xserver.desktopManager.plasma5.enable = true;
       };
   };
 

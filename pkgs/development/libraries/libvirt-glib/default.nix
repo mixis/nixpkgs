@@ -1,35 +1,29 @@
 { stdenv, fetchurl, pkgconfig, libvirt, glib, libxml2, intltool, libtool, yajl
-, nettle, libgcrypt, python, pygobject, gobjectIntrospection, libcap_ng
+, nettle, libgcrypt, pythonPackages, gobject-introspection, libcap_ng, numactl
+, xen, libapparmor, vala
 }:
 
-stdenv.mkDerivation rec {
-  name = "libvirt-glib-0.1.9";
+let
+  inherit (pythonPackages) python pygobject2;
+in stdenv.mkDerivation rec {
+  name = "libvirt-glib-2.0.0";
+
+  outputs = [ "out" "dev" ];
 
   src = fetchurl {
-    url = "http://libvirt.org/sources/glib/${name}.tar.gz";
-    sha256 = "0n59hp0kwn80z9136g2n7pwkrlhlsxksr6gy4w7783d71qk3cfq5";
+    url = "https://libvirt.org/sources/glib/${name}.tar.gz";
+    sha256 = "0six9ckmvlwwyavyjkgc262qkpvfqgi8rjij7cyk00bmqq8c9s4l";
   };
 
+  nativeBuildInputs = [ pkgconfig vala ];
   buildInputs = [
-    pkgconfig libvirt glib libxml2 intltool libtool yajl nettle libgcrypt
-    python pygobject gobjectIntrospection libcap_ng
+    libvirt glib libxml2 intltool libtool yajl nettle libgcrypt
+    python pygobject2 gobject-introspection libcap_ng numactl libapparmor
+  ] ++ stdenv.lib.optionals stdenv.isx86_64 [
+    xen
   ];
 
-  # Compiler flag -fstack-protector-all fixes this build error:
-  #
-  #   ./.libs/libvirt-glib-1.0.so: undefined reference to `__stack_chk_guard'
-  #
-  # And the extra include path fixes this build error:
-  #
-  #   In file included from ../libvirt-gobject/libvirt-gobject-domain-device.h:30:0,
-  #                    from /tmp/nix-build-libvirt-glib-0.1.7.drv-2/libvirt-glib-0.1.7/libvirt-gobject/libvirt-gobject.h:33,
-  #                    from <stdin>:4:
-  #   ../libvirt-gobject/libvirt-gobject-domain.h:33:29: fatal error: libvirt/libvirt.h: No such file or directory
-  #   compilation terminated.
-  #   make[3]: *** [LibvirtGObject-1.0.gir] Error 1
-  preConfigure = ''
-    export NIX_CFLAGS_COMPILE="-fstack-protector-all -I${libvirt}/include"
-  '';
+  enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
     description = "Library for working with virtual machines";

@@ -1,8 +1,8 @@
 { stdenv, fetchurl, pkgconfig,
-  version ? "2.1.9",
+  version ? "2.2.11",
   mainSrc ? fetchurl {
     url = "http://sphinxsearch.com/files/sphinx-${version}-release.tar.gz";
-    sha256 = "00vwxf3zr0g1fq9mls1z2rd8nxw74b76pkl1j466lig1qc5am2b2";
+    sha256 = "1aa1mh32y019j8s3sjzn4vwi0xn83dwgl685jnbgh51k16gh6qk6";
   }
 }:
 
@@ -16,7 +16,7 @@ stdenv.mkDerivation rec {
     "--enable-id64"
   ];
 
-  buildInputs = [
+  nativeBuildInputs = [
     pkgconfig
   ];
 

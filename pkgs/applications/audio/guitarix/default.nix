@@ -1,28 +1,44 @@
-{ stdenv, fetchurl, avahi, boost, eigen, fftw, gettext, glib, glibmm, gtk
-, gtkmm, intltool, jack2, ladspaH, librdf, libsndfile, lilv, lv2
-, pkgconfig, python, serd, sord, sratom }:
+{ stdenv, fetchurl, gettext, intltool, pkgconfig, python2
+, avahi, bluez, boost, eigen, fftw, glib, glib-networking
+, glibmm, gsettings-desktop-schemas, gtkmm2, libjack2
+, ladspaH, libav, librdf, libsndfile, lilv, lv2, serd, sord, sratom
+, wrapGAppsHook, zita-convolver, zita-resampler, curl, wafHook
+, optimizationSupport ? false # Enable support for native CPU extensions
+}:
+
+let
+  inherit (stdenv.lib) optional;
+in
 
 stdenv.mkDerivation rec {
   name = "guitarix-${version}";
-  version = "0.31.0";
+  version = "0.37.3";
 
   src = fetchurl {
-    url = "mirror://sourceforge/guitarix/guitarix2-${version}.tar.bz2";
-    sha256 = "0n3swk4xahspf42qglikfmvcz8my43wmp6sp4ns7h4m8hr9lgfk6";
+    url = "mirror://sourceforge/guitarix/guitarix2-${version}.tar.xz";
+    sha256 = "1wfm8wrwrnqpb4ihy75n7l9i6vml536jlq9pdx2pblbc4ba3paac";
   };
 
+  nativeBuildInputs = [ gettext intltool wrapGAppsHook pkgconfig python2 wafHook ];
+
   buildInputs = [
-    avahi boost boost.lib eigen fftw gettext glib glibmm gtk gtkmm intltool
-    jack2 ladspaH librdf libsndfile lilv lv2 pkgconfig python serd sord sratom
+    avahi bluez boost eigen fftw glib glibmm glib-networking.out
+    gsettings-desktop-schemas gtkmm2 libjack2 ladspaH libav librdf
+    libsndfile lilv lv2 serd sord sratom zita-convolver
+    zita-resampler curl
   ];
 
-  configurePhase = "python waf configure --prefix=$out";
+  configureFlags = [
+    "--shared-lib"
+    "--no-desktop-update"
+    "--enable-nls"
+    "--no-faust" # todo: find out why --faust doesn't work
+    "--install-roboto-font"
+    "--includeresampler"
+    "--convolver-ffmpeg"
+  ] ++ optional optimizationSupport "--optimization";
 
-  buildPhase = "python waf build";
-
-  installPhase = "python waf install";
-
-  meta = with stdenv.lib; { 
+  meta = with stdenv.lib; {
     description = "A virtual guitar amplifier for Linux running with JACK";
     longDescription = ''
         guitarix is a virtual guitar amplifier for Linux running with

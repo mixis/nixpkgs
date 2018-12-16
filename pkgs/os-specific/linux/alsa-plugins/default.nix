@@ -1,21 +1,18 @@
-{ stdenv, fetchurl, lib, pkgconfig, alsaLib, libogg, pulseaudio ? null, jack2 ? null }:
+{ stdenv, fetchurl, lib, pkgconfig, alsaLib, libogg, libpulseaudio ? null, libjack2 ? null }:
 
 stdenv.mkDerivation rec {
-  name = "alsa-plugins-1.0.28";
+  name = "alsa-plugins-1.1.6";
 
   src = fetchurl {
-    urls = [
-      "ftp://ftp.alsa-project.org/pub/plugins/${name}.tar.bz2"
-      "http://alsa.cybermirror.org/plugins/${name}.tar.bz2"
-    ];
-    sha256 = "081is33afhykb4ysll8s6gh0d6nm1cglslj9ck0disbyl3qqlvs2";
+    url = "mirror://alsa/plugins/${name}.tar.bz2";
+    sha256 = "04qcwkisbh0d6lnh0rw1k6n869fbs6zbfq6yvb41rymiwgmk27bg";
   };
 
   # ToDo: a52, etc.?
   buildInputs =
     [ pkgconfig alsaLib libogg ]
-    ++ lib.optional (pulseaudio != null) pulseaudio
-    ++ lib.optional (jack2 != null) jack2;
+    ++ lib.optional (libpulseaudio != null) libpulseaudio
+    ++ lib.optional (libjack2 != null) libjack2;
 
   meta = with lib; {
     description = "Various plugins for ALSA";

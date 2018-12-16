@@ -1,22 +1,21 @@
-{stdenv, fetchurl, openssl, libX11} :
+{stdenv, fetchurl, openssl, libX11, libgssglue, pkgconfig} :
 
 stdenv.mkDerivation (rec {
   pname = "rdesktop";
-  version = "1.8.2";
+  version = "1.8.3";
   name = "${pname}-${version}";
 
   src = fetchurl {
     url = "mirror://sourceforge/${pname}/${name}.tar.gz";
-    sha256 = "0y0s0qjfsflp4drcn75ykx6as7mn13092bcvlp2ibhilkpa27gzv";
+    sha256 = "1r7c1rjmw2xzq8fw0scyb453gy9z19774z1z8ldmzzsfndb03cl8";
   };
 
-  patches = [ ./enable_windows_key.patch ];
-
-  buildInputs = [openssl libX11];
+  nativeBuildInputs = [pkgconfig];
+  buildInputs = [openssl libX11 libgssglue];
 
   configureFlags = [
-    "--with-openssl=${openssl}"
-    "--disable-credssp"
+    "--with-ipv6"
+    "--with-openssl=${openssl.dev}"
     "--disable-smartcard"
   ];
 
@@ -24,6 +23,6 @@ stdenv.mkDerivation (rec {
     description = "Open source client for Windows Terminal Services";
     homepage = http://www.rdesktop.org/;
     platforms = stdenv.lib.platforms.linux;
-    license     = stdenv.lib.licenses.gpl2;
+    license = stdenv.lib.licenses.gpl2;
   };
 })

@@ -1,18 +1,23 @@
-{ stdenv, cmake, fetchurl, pkgconfig, qt5, boost, exiv2, fftwFloat, gsl
+{ stdenv, cmake, fetchurl, pkgconfig, boost, exiv2, fftwFloat, gsl
 , ilmbase, lcms2, libraw, libtiff, openexr
+, qtbase, qtdeclarative, qttools, qtwebengine
 }:
 
 stdenv.mkDerivation rec {
-  name = "luminance-hdr-2.4.0";
+  name = "luminance-hdr-2.5.1";
 
   src = fetchurl {
     url = "mirror://sourceforge/qtpfsgui/${name}.tar.bz2";
-    sha256 = "00fldbcizrx8jcnjgq74n3zmbm27dxzl96fxa7q49689mfnlw08l";
+    sha256 = "15hnyk9yjkkc97dmnrg2ipfgwqxprlcyv2kyvbls4d54zc56x658";
   };
 
-  NIX_CFLAGS_COMPILE = "-I${ilmbase}/include/OpenEXR";
+  NIX_CFLAGS_COMPILE = "-I${ilmbase.dev}/include/OpenEXR";
 
-  buildInputs = [ qt5 boost boost.lib exiv2 fftwFloat gsl ilmbase lcms2 libraw libtiff openexr ];
+  buildInputs =
+    [
+      qtbase qtdeclarative qttools qtwebengine
+      boost exiv2 fftwFloat gsl ilmbase lcms2 libraw libtiff openexr
+    ];
 
   nativeBuildInputs = [ cmake pkgconfig ];
 

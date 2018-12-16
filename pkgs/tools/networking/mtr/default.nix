@@ -1,49 +1,40 @@
-x@{builderDefsPackage, ncurses
-  , ...}:
-builderDefsPackage
-(a :  
-let 
-  helperArgNames = ["stdenv" "fetchurl" "builderDefsPackage"] ++ 
-    [];
+{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, ncurses
+, withGtk ? false, gtk2 ? null }:
 
-  buildInputs = map (n: builtins.getAttr n x)
-    (builtins.attrNames (builtins.removeAttrs x helperArgNames));
-  sourceInfo = rec {
-    baseName="mtr";
-    version="0.85";
-    name="${baseName}-${version}";
-    url="ftp://ftp.bitwizard.nl/${baseName}/${name}.tar.gz";
-    hash="1jqrz8mil3lraaqgc87dyvx8d4bf3vq232pfx9mksxnkbphp4qvd";
-  };
-in
-rec {
-  src = a.fetchurl {
-    url = sourceInfo.url;
-    sha256 = sourceInfo.hash;
+assert withGtk -> gtk2 != null;
+
+stdenv.mkDerivation rec {
+  name="mtr-${version}";
+  version="0.92";
+
+  src = fetchFromGitHub {
+    owner  = "traviscross";
+    repo   = "mtr";
+    rev    = "v${version}";
+    sha256 = "0ca2ml846cv0zzkpd8y7ah6i9b3czrr8wlxja3cray94ybwb294d";
   };
 
-  inherit (sourceInfo) name version;
-  inherit buildInputs;
+  preConfigure = ''
+    echo ${version} > .tarball-version
 
-  patches = [ ./edd425.patch ];
+    ./bootstrap.sh
 
-  /* doConfigure should be removed if not needed */
-  phaseNames = ["doConfigure" "doPatch" "doMakeInstall"];
+    substituteInPlace Makefile.in --replace ' install-exec-hook' ""
+  '';
 
-  meta = {
+  configureFlags = stdenv.lib.optional (!withGtk) "--without-gtk";
+
+  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+
+  buildInputs = [ ncurses ] ++ stdenv.lib.optional withGtk gtk2;
+
+  enableParallelBuilding = true;
+
+  meta = with stdenv.lib; {
     description = "A network diagnostics tool";
-    maintainers = with a.lib.maintainers;
-    [
-      raskin
-    ];
-    platforms = with a.lib.platforms;
-      unix;
-    license = a.lib.licenses.gpl2;
+    homepage    = http://www.bitwizard.nl/mtr/;
+    license     = licenses.gpl2;
+    maintainers = with maintainers; [ koral orivej raskin ];
+    platforms   = platforms.unix;
   };
-  passthru = {
-    updateInfo = {
-      downloadPage = "ftp://ftp.bitwizard.nl/mtr/";
-    };
-  };
-}) x
-
+}

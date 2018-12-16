@@ -4,6 +4,7 @@
                 xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
                 xmlns:str="http://exslt.org/strings"
                 xmlns:xlink="http://www.w3.org/1999/xlink"
+                xmlns:nixos="tag:nixos.org"
                 xmlns="http://docbook.org/ns/docbook"
                 extension-element-prefixes="str"
                 >
@@ -11,12 +12,13 @@
   <xsl:output method='xml' encoding="UTF-8" />
 
   <xsl:param name="revision" />
+  <xsl:param name="program" />
 
 
   <xsl:template match="/expr/list">
-
-      <variablelist>
-
+    <appendix xml:id="appendix-configuration-options">
+      <title>Configuration Options</title>
+      <variablelist xml:id="configuration-variable-list">
         <xsl:for-each select="attrs">
           <xsl:variable name="id" select="concat('opt-', str:replace(str:replace(str:replace(str:replace(attr[@name = 'name']/string/@value, '*', '_'), '&lt;', '_'), '>', '_'), '?', '_'))" />
           <varlistentry>
@@ -25,60 +27,83 @@
               <option>
                 <xsl:value-of select="attr[@name = 'name']/string/@value" />
               </option>
-             </term>
+            </term>
 
-             <listitem>
+            <listitem>
 
-               <para>
-                 <xsl:value-of disable-output-escaping="yes"
-                               select="attr[@name = 'description']/string/@value" />
-               </para>
+              <nixos:option-description>
+                <para>
+                  <xsl:value-of disable-output-escaping="yes"
+                                select="attr[@name = 'description']/string/@value" />
+                </para>
+              </nixos:option-description>
 
-               <xsl:if test="attr[@name = 'default']">
-                 <para>
-                   <emphasis>Default:</emphasis>
-                   <xsl:text> </xsl:text>
-                   <xsl:apply-templates select="attr[@name = 'default']" mode="top" />
-                 </para>
-               </xsl:if>
+              <xsl:if test="attr[@name = 'type']">
+                <para>
+                  <emphasis>Type:</emphasis>
+                  <xsl:text> </xsl:text>
+                  <xsl:value-of select="attr[@name = 'type']/string/@value"/>
+                  <xsl:if test="attr[@name = 'readOnly']/bool/@value = 'true'">
+                    <xsl:text> </xsl:text>
+                    <emphasis>(read only)</emphasis>
+                  </xsl:if>
+                </para>
+              </xsl:if>
 
-               <xsl:if test="attr[@name = 'example']">
-                 <para>
-                   <emphasis>Example:</emphasis>
-                   <xsl:text> </xsl:text>
-                   <xsl:choose>
-                     <xsl:when test="attr[@name = 'example']/attrs[attr[@name = '_type' and string[@value = 'literalExample']]]">
-                       <programlisting><xsl:value-of select="attr[@name = 'example']/attrs/attr[@name = 'text']/string/@value" /></programlisting>
-                     </xsl:when>
-                     <xsl:otherwise>
-                       <xsl:apply-templates select="attr[@name = 'example']" mode="top" />
-                     </xsl:otherwise>
-                   </xsl:choose>
-                 </para>
-               </xsl:if>
+              <xsl:if test="attr[@name = 'default']">
+                <para>
+                  <emphasis>Default:</emphasis>
+                  <xsl:text> </xsl:text>
+                  <xsl:apply-templates select="attr[@name = 'default']" mode="top" />
+                </para>
+              </xsl:if>
 
-               <xsl:if test="count(attr[@name = 'declarations']/list/*) != 0">
-                 <para>
-                   <emphasis>Declared by:</emphasis>
-                 </para>
-                 <xsl:apply-templates select="attr[@name = 'declarations']" />
-               </xsl:if>
+              <xsl:if test="attr[@name = 'example']">
+                <para>
+                  <emphasis>Example:</emphasis>
+                  <xsl:text> </xsl:text>
+                  <xsl:choose>
+                    <xsl:when test="attr[@name = 'example']/attrs[attr[@name = '_type' and string[@value = 'literalExample']]]">
+                      <programlisting><xsl:value-of select="attr[@name = 'example']/attrs/attr[@name = 'text']/string/@value" /></programlisting>
+                    </xsl:when>
+                    <xsl:otherwise>
+                      <xsl:apply-templates select="attr[@name = 'example']" mode="top" />
+                    </xsl:otherwise>
+                  </xsl:choose>
+                </para>
+              </xsl:if>
 
-               <xsl:if test="count(attr[@name = 'definitions']/list/*) != 0">
-                 <para>
-                   <emphasis>Defined by:</emphasis>
-                 </para>
-                 <xsl:apply-templates select="attr[@name = 'definitions']" />
-               </xsl:if>
+              <xsl:if test="attr[@name = 'relatedPackages']">
+                <para>
+                  <emphasis>Related packages:</emphasis>
+                  <xsl:text> </xsl:text>
+                  <xsl:value-of disable-output-escaping="yes"
+                                select="attr[@name = 'relatedPackages']/string/@value" />
+                </para>
+              </xsl:if>
 
-             </listitem>
+              <xsl:if test="count(attr[@name = 'declarations']/list/*) != 0">
+                <para>
+                  <emphasis>Declared by:</emphasis>
+                </para>
+                <xsl:apply-templates select="attr[@name = 'declarations']" />
+              </xsl:if>
+
+              <xsl:if test="count(attr[@name = 'definitions']/list/*) != 0">
+                <para>
+                  <emphasis>Defined by:</emphasis>
+                </para>
+                <xsl:apply-templates select="attr[@name = 'definitions']" />
+              </xsl:if>
+
+            </listitem>
 
           </varlistentry>
 
         </xsl:for-each>
 
       </variablelist>
-
+    </appendix>
   </xsl:template>
 
 
@@ -176,7 +201,7 @@
                 </xsl:otherwise>
               </xsl:choose>
             </xsl:when>
-            <xsl:when test="$revision != 'local' and contains(@value, 'nixops') and contains(@value, '/nix/')">
+            <xsl:when test="$revision != 'local' and $program = 'nixops' and contains(@value, '/nix/')">
               <xsl:attribute name="xlink:href">https://github.com/NixOS/nixops/blob/<xsl:value-of select="$revision"/>/nix/<xsl:value-of select="substring-after(@value, '/nix/')"/></xsl:attribute>
             </xsl:when>
             <xsl:otherwise>

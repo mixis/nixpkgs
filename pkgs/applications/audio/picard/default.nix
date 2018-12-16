@@ -1,57 +1,40 @@
-{ stdenv, fetchurl, pythonPackages, gettext, pyqt4
-, pkgconfig, libdiscid, libofa, ffmpeg, chromaprint
-}:
+{ stdenv, python3Packages, fetchurl, gettext, chromaprint }:
 
-pythonPackages.buildPythonPackage rec {
-  name = "picard-${version}";
-  namePrefix = "";
-  version = "1.2";
+let
+  pythonPackages = python3Packages;
+in pythonPackages.buildPythonApplication rec {
+  pname = "picard";
+  version = "2.0.4";
 
   src = fetchurl {
-    url = "http://ftp.musicbrainz.org/pub/musicbrainz/picard/${name}.tar.gz";
-    sha256 = "0sbsf8hzxhxcnnjqvsd6mc23lmk7w33nln0f3w72f89mjgs6pxm6";
+    url = "http://ftp.musicbrainz.org/pub/musicbrainz/picard/picard-${version}.tar.gz";
+    sha256 = "0ds3ylpqn717fnzcjrfn05v5xram01bj6n3hwn9igmkd1jgf8vhc";
   };
 
-  postPatch = let
-    discid = "${libdiscid}/lib/libdiscid.so.0";
-    fpr = "${chromaprint}/bin/fpcalc";
-  in ''
-    substituteInPlace picard/disc.py --replace libdiscid.so.0 ${discid}
-    substituteInPlace picard/const.py \
-        --replace "FPCALC_NAMES = [" "FPCALC_NAMES = ['${fpr}',"
-  '';
+  buildInputs = [ gettext ];
 
-  buildInputs = [
-    pkgconfig
-    ffmpeg
-    libofa
-    gettext
+  propagatedBuildInputs = with pythonPackages; [
+    pyqt5
+    mutagen
+    chromaprint
+    discid
   ];
-
-  propagatedBuildInputs = [
-    pythonPackages.mutagen
-    pyqt4
-    libdiscid
-  ];
-
-  configurePhase = ''
-    python setup.py config
-  '';
-
-  buildPhase = ''
-    python setup.py build
-  '';
 
   installPhase = ''
     python setup.py install --prefix="$out"
   '';
 
+  prePatch = ''
+    # Pesky unicode punctuation.
+    substituteInPlace setup.cfg --replace "‘" "'"
+  '';
+
   doCheck = false;
 
   meta = with stdenv.lib; {
-    homepage = "http://musicbrainz.org/doc/MusicBrainz_Picard";
+    homepage = http://musicbrainz.org/doc/MusicBrainz_Picard;
     description = "The official MusicBrainz tagger";
-    maintainers = with maintainers; [ emery ];
+    maintainers = with maintainers; [ ehmry ];
     license = licenses.gpl2;
     platforms = platforms.all;
   };

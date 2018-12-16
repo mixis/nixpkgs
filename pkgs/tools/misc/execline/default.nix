@@ -1,54 +1,35 @@
-{stdenv, fetchurl, skalibs}:
+{ stdenv, skawarePackages }:
 
-let
+with skawarePackages;
 
-  version = "1.3.1.1";
+buildPackage {
+  pname = "execline";
+  version = "2.5.0.1";
+  sha256 = "0j8hwdw8wn0rv8njdza8fbgmvyjg7hqp3qlbw00i7fwskr7d21wd";
 
-in stdenv.mkDerivation rec {
+  description = "A small scripting language, to be used in place of a shell in non-interactive scripts";
 
-  name = "execline-${version}";
+  outputs = [ "bin" "lib" "dev" "doc" "out" ];
 
-  src = fetchurl {
-    url = "http://skarnet.org/software/execline/${name}.tar.gz";
-    sha256 = "1br3qzif166kbp4k813ljbyq058p7mfsp2lj88n8vi4dmj935nzg";
-  };
+  # TODO: nsss support
+  configureFlags = [
+    "--libdir=\${lib}/lib"
+    "--dynlibdir=\${lib}/lib"
+    "--bindir=\${bin}/bin"
+    "--includedir=\${dev}/include"
+    "--with-sysdeps=${skalibs.lib}/lib/skalibs/sysdeps"
+    "--with-include=${skalibs.dev}/include"
+    "--with-lib=${skalibs.lib}/lib"
+    "--with-dynlib=${skalibs.lib}/lib"
+  ];
 
-  buildInputs = [ skalibs ];
+  postInstall = ''
+    # remove all execline executables from build directory
+    rm $(find -type f -mindepth 1 -maxdepth 1 -executable)
+    rm libexecline.*
 
-  sourceRoot = "admin/${name}";
-
-  configurePhase = ''
-    pushd conf-compile
-
-    printf "$out/bin"     > conf-install-command
-    printf "$out/include" > conf-install-include
-    printf "$out/lib"     > conf-install-library
-    printf "$out/lib"     > conf-install-library.so
-    printf "$out/sysdeps" > conf-install-sysdeps
-
-    printf "${skalibs}/sysdeps" > import
-    printf "${skalibs}/include" > path-include
-    printf "${skalibs}/lib"     > path-library
-
-    # let nix builder strip things, cross-platform
-    truncate --size 0 conf-stripbins
-    truncate --size 0 conf-striplibs
-
-    rm -f flag-slashpackage
-    touch flag-allstatic
-
-    popd
+    mv doc $doc/share/doc/execline/html
+    mv examples $doc/share/doc/execline/examples
   '';
-
-  preBuild = ''
-    patchShebangs src/sys
-  '';
-
-  meta = {
-    homepage = http://skarnet.org/software/execline/;
-    description = "A small scripting language, to be used in place of a shell in non-interactive scripts.";
-    platforms = stdenv.lib.platforms.all;
-    license = stdenv.lib.licenses.isc;
-  };
 
 }

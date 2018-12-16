@@ -1,27 +1,49 @@
-{stdenv, fetchurl, ncurses, libevent, pkgconfig}:
+{ stdenv, fetchFromGitHub, autoreconfHook, ncurses, libevent, pkgconfig, makeWrapper }:
 
-stdenv.mkDerivation rec {
-  pname = "tmux";
-  version = "1.9a";
-  name = "${pname}-${version}";
+let
 
-  src = fetchurl {
-    url = "mirror://sourceforge/${pname}/${name}.tar.gz";
-    sha256 = "1x9k4wfd4l5jg6fh7xkr3yyilizha6ka8m5b1nr0kw8wj0mv5qy5";
+  bashCompletion = fetchFromGitHub {
+    owner = "imomaliev";
+    repo = "tmux-bash-completion";
+    rev = "fcda450d452f07d36d2f9f27e7e863ba5241200d";
+    sha256 = "092jpkhggjqspmknw7h3icm0154rg21mkhbc71j5bxfmfjdxmya8";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+in
 
-  buildInputs = [ ncurses libevent ];
+stdenv.mkDerivation rec {
+  name = "tmux-${version}";
+  version = "2.8";
 
-  postInstall =
-    ''
-      mkdir -p $out/etc/bash_completion.d
-      cp -v examples/bash_completion_tmux.sh $out/etc/bash_completion.d/tmux
-    '';
+  outputs = [ "out" "man" ];
+
+  src = fetchFromGitHub {
+    owner = "tmux";
+    repo = "tmux";
+    rev = "01918cb0170e07288d3aec624516e6470bf5b7fc";
+    sha256 = "1fy87wvxn7r7jzqapvjisc1iizic3kxqk2lv83giqmw1y4g3s7rl";
+  };
+
+  postPatch = ''
+    sed -i 's/2.8-rc/2.8/' configure.ac
+  '';
+
+  nativeBuildInputs = [ pkgconfig autoreconfHook ];
+
+  buildInputs = [ ncurses libevent makeWrapper ];
+
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--localstatedir=/var"
+  ];
+
+  postInstall = ''
+    mkdir -p $out/share/bash-completion/completions
+    cp -v ${bashCompletion}/completions/tmux $out/share/bash-completion/completions/tmux
+  '';
 
   meta = {
-    homepage = http://tmux.sourceforge.net/;
+    homepage = http://tmux.github.io/;
     description = "Terminal multiplexer";
 
     longDescription =
@@ -41,6 +63,6 @@ stdenv.mkDerivation rec {
     license = stdenv.lib.licenses.bsd3;
 
     platforms = stdenv.lib.platforms.unix;
-    maintainers = with stdenv.lib.maintainers; [ shlevy thammers ];
+    maintainers = with stdenv.lib.maintainers; [ thammers fpletz ];
   };
 }

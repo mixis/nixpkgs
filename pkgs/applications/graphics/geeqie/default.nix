@@ -1,32 +1,34 @@
-{ stdenv, fetchgit, pkgconfig, autoconf, automake, gtk, libpng, exiv2, lcms
-, intltool, gettext, libchamplain, fbida }:
+{ stdenv, fetchurl, pkgconfig, autoconf, automake, gettext, intltool
+, gtk3, lcms2, exiv2, libchamplain, clutter-gtk, ffmpegthumbnailer, fbida
+}:
 
 stdenv.mkDerivation rec {
   name = "geeqie-${version}";
-  version = "1.2";
+  version = "1.4";
 
-  src = fetchgit {
-    url = "git://gitorious.org/geeqie/geeqie.git";
-    rev = "refs/tags/v${version}";
-    sha256 = "1h9w0jrcqcp5jjgmks5pvpppnfxhcd1s3vqlyb3qyil2wfk8n8wp";
+  src = fetchurl {
+    url = "http://geeqie.org/${name}.tar.xz";
+    sha256 = "0ciygvcxb78pqg59r6p061mkbpvkgv2rv3r79j3kgv3kalb3ln2w";
   };
+
+  # Do not build the changelog as this requires markdown.
+  patches = [ ./geeqie-no-changelog.patch ];
 
   preConfigure = "./autogen.sh";
 
-  configureFlags = [ "--enable-gps" ];
+  nativeBuildInputs = [ pkgconfig autoconf automake gettext intltool ];
+  buildInputs = [
+    gtk3 lcms2 exiv2 libchamplain clutter-gtk ffmpegthumbnailer fbida
+  ];
 
-  buildInputs =
-    [ pkgconfig autoconf automake gtk libpng exiv2 lcms intltool gettext
-      libchamplain
-    ];
+  postInstall = ''
+    # Allow geeqie to find exiv2 and exiftran, necessary to
+    # losslessly rotate JPEG images.
+    sed -i $out/lib/geeqie/geeqie-rotate \
+        -e '1 a export PATH=${stdenv.lib.makeBinPath [ exiv2 fbida ]}:$PATH'
+  '';
 
-  postInstall =
-    ''
-      # Allow geeqie to find exiv2 and exiftran, necessary to
-      # losslessly rotate JPEG images.
-      sed -i $out/lib/geeqie/geeqie-rotate \
-          -e '1 a export PATH=${exiv2}/bin:${fbida}/bin:$PATH'
-    '';
+  enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
     description = "Lightweight GTK+ based image viewer";
@@ -46,7 +48,7 @@ stdenv.mkDerivation rec {
 
     homepage = http://geeqie.sourceforge.net;
 
-    maintainers = with maintainers; [ pSub ];
-    platforms = platforms.gnu;
+    maintainers = with maintainers; [ jfrankenau pSub ];
+    platforms = platforms.gnu ++ platforms.linux;
   };
 }

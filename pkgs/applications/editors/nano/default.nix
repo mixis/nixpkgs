@@ -1,22 +1,57 @@
-{ stdenv, fetchurl, ncurses, gettext }:
+{ stdenv, fetchurl, fetchFromGitHub
+, ncurses
+, texinfo
+, gettext ? null
+, enableNls ? true
+, enableTiny ? false
+}:
 
-stdenv.mkDerivation (rec {
-  pname = "nano";
-  version = "2.3.6";
+assert enableNls -> (gettext != null);
 
-  name = "${pname}-${version}";
+with stdenv.lib;
+
+let
+  nixSyntaxHighlight = fetchFromGitHub {
+    owner = "seitz";
+    repo = "nanonix";
+    rev = "bf8d898efaa10dce3f7972ff765b58c353b4b4ab";
+    sha256 = "0773s5iz8aw9npgyasb0r2ybp6gvy2s9sq51az8w7h52bzn5blnn";
+  };
+
+in stdenv.mkDerivation rec {
+  name = "nano-${version}";
+  version = "3.2";
 
   src = fetchurl {
-    url = "mirror://gnu/nano/${name}.tar.gz";
-    sha256 = "a74bf3f18b12c1c777ae737c0e463152439e381aba8720b4bc67449f36a09534";
+    url = "mirror://gnu/nano/${name}.tar.xz";
+    sha256 = "0jb3zq0v84xb0chyynkcp2jhs9660wmpkic294p4p6c96npp69yi";
   };
 
-  buildInputs = [ ncurses gettext ];
+  nativeBuildInputs = [ texinfo ] ++ optional enableNls gettext;
+  buildInputs = [ ncurses ];
 
-  configureFlags = "sysconfdir=/etc";
+  outputs = [ "out" "info" ];
+
+  configureFlags = [
+    "--sysconfdir=/etc"
+    (stdenv.lib.enableFeature enableNls "nls")
+    (stdenv.lib.enableFeature enableTiny "tiny")
+  ];
+
+  postInstall = ''
+    cp ${nixSyntaxHighlight}/nix.nanorc $out/share/nano/
+  '';
+
+  enableParallelBuilding = true;
 
   meta = {
-    homepage = http://www.nano-editor.org/;
+    homepage = https://www.nano-editor.org/;
     description = "A small, user-friendly console text editor";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [
+      jgeerds
+      joachifm
+    ];
+    platforms = platforms.all;
   };
-})
+}

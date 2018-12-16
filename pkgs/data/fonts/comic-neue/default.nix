@@ -1,21 +1,23 @@
-{stdenv, fetchurl, unzip}:
+{ stdenv, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "comic-neue-1.1";
+let
+  version = "2.2";
+in fetchzip rec {
+  name = "comic-neue-${version}";
 
-  src = fetchurl {
-    url = "http://comicneue.com/comic-neue-1.1.zip";
-    sha256 = "f9442fc42252db62ea788bd0247ae0e74571678d1dbd3e3edc229389050d6923";
-  };
+  url = "http://comicneue.com/${name}.zip";
 
-  buildInputs = [unzip];
-  phases = [ "unpackPhase" "installPhase" ];
-  sourceRoot = name;
-
-  installPhase = ''
-    mkdir -p $out/share/fonts/truetype
-    cp -v *.ttf $out/share/fonts/truetype
+  postFetch = ''
+    mkdir -vp $out/share/{doc,fonts}
+    unzip -j $downloadedFile comic-neue-2.2/\*.otf   -d $out/share/fonts/opentype
+    unzip -j $downloadedFile comic-neue-2.2/\*.ttf   -d $out/share/fonts/truetype
+    unzip -j $downloadedFile comic-neue-2.2/\*.eot   -d $out/share/fonts/EOT
+    unzip -j $downloadedFile comic-neue-2.2/\*.woff  -d $out/share/fonts/WOFF
+    unzip -j $downloadedFile comic-neue-2.2/\*.woff2 -d $out/share/fonts/WOFF2
+    unzip -j $downloadedFile comic-neue-2.2/\*.pdf comic-neue-2.2/FONTLOG.txt comic-neue-2.2/OFL-FAQ.txt comic-neue-2.2/SIL-License.txt -d $out/share/doc/${name}
   '';
+
+  sha256 = "1yypq5aqqzv3q1c6vx5130mi2iwihzzvrawhwqpwsfjl0p25sq9q";
 
   meta = with stdenv.lib; {
     homepage = http://comicneue.com/;
@@ -27,7 +29,8 @@ stdenv.mkDerivation rec {
       the latter angular terminals.  Both variants come in Light,
       Regular, and Bold weights with Oblique variants.
     '';
-    license = licenses.cc0;
+    license = licenses.ofl;
     platforms = platforms.all;
+    maintainers = [ maintainers.AndersonTorres ];
   };
 }

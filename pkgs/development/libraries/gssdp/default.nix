@@ -1,19 +1,30 @@
-{stdenv, fetchurl, pkgconfig, libsoup, glib, libxml2}:
+{ stdenv, fetchurl, pkgconfig, gobject-introspection, vala, gtk-doc, docbook_xsl, docbook_xml_dtd_412, libsoup, gtk3, glib }:
 
-stdenv.mkDerivation {
-  name = "gssdp-0.12.2.1";
+stdenv.mkDerivation rec {
+  name = "gssdp-${version}";
+  version = "1.0.2";
+
+  outputs = [ "out" "bin" "dev" "devdoc" ];
 
   src = fetchurl {
-    url = mirror://gnome/sources/gssdp/0.14/gssdp-0.14.6.tar.xz;
-    sha256 = "1kgakr0rpdpm7nkp4ycka12nndga16wmzim79v1nbcc0j2wxxkws";
+    url = "mirror://gnome/sources/gssdp/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
+    sha256 = "1p1m2m3ndzr2whipqw4vfb6s6ia0g7rnzzc4pnq8b8g1qw4prqd1";
   };
 
-  buildInputs = [pkgconfig libsoup glib libxml2];
+  nativeBuildInputs = [ pkgconfig gobject-introspection vala gtk-doc docbook_xsl docbook_xml_dtd_412 ];
+  buildInputs = [ libsoup gtk3 ];
+  propagatedBuildInputs = [ glib ];
 
-  meta = {
+  configureFlags = [
+    "--enable-gtk-doc"
+  ];
+
+  doCheck = true;
+
+  meta = with stdenv.lib; {
     description = "GObject-based API for handling resource discovery and announcement over SSDP";
     homepage = http://www.gupnp.org/;
-    license = stdenv.lib.licenses.lgpl2;
-    platforms = stdenv.lib.platforms.all;
+    license = licenses.lgpl2Plus;
+    platforms = platforms.all;
   };
 }

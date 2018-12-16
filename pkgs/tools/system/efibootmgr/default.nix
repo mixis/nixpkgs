@@ -1,29 +1,29 @@
-{ stdenv, fetchgit, perl, efivar, pciutils, zlib }:
+{ stdenv, fetchFromGitHub, pkgconfig, efivar, popt }:
 
 stdenv.mkDerivation rec {
   name = "efibootmgr-${version}";
-  version = "0.7.0";
+  version = "17";
 
-  buildInputs = [ perl efivar pciutils zlib ];
+  nativeBuildInputs = [ pkgconfig ];
 
-  src = fetchgit {
-    url = "git://github.com/vathpela/efibootmgr.git";
-    rev = "refs/tags/${name}";
-    sha256 = "1nazmqxppx2xa8clv4bjdb1b6gyyimgjdj85n2hmf1smqr8krrmz";
+  buildInputs = [ efivar popt ];
+
+  src = fetchFromGitHub {
+    owner = "rhboot";
+    repo = "efibootmgr";
+    rev = version;
+    sha256 = "1niicijxg59rsmiw3rsjwy4bvi1n42dynvm01lnp9haixdzdpq03";
   };
 
-  postPatch = ''
-    substituteInPlace "./tools/install.pl" \
-      --replace "/usr/bin/perl" "${perl}/bin/perl"
-  '';
+  makeFlags = [ "EFIDIR=nixos" ];
 
-  installFlags = [ "BINDIR=$(out)/sbin" ];
+  installFlags = [ "prefix=$(out)" ];
 
   meta = with stdenv.lib; {
     description = "A Linux user-space application to modify the Intel Extensible Firmware Interface (EFI) Boot Manager";
-    homepage = http://linux.dell.com/efibootmgr/;
+    homepage = https://github.com/rhboot/efibootmgr;
     license = licenses.gpl2;
-    maintainers = with maintainers; [ shlevy ];
+    maintainers = with maintainers; [ ];
     platforms = platforms.linux;
   };
 }

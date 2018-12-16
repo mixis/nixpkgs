@@ -1,104 +1,192 @@
-{ stdenv, fetchurl, pkgconfig, m4, gtk, pango, perl, python, zip, libIDL
-, libjpeg, libpng, zlib, dbus, dbus_glib, bzip2, xlibs
-, freetype, fontconfig, file, alsaLib, nspr, nss, libnotify
-, yasm, mesa, sqlite, unzip, makeWrapper, pysqlite
-, hunspell, libevent, libstartup_notification, libvpx
-, cairo, gstreamer, gst_plugins_base, icu
+{ lib, stdenv, fetchurl, pkgconfig, gtk2, pango, perl, python, zip, fetchpatch
+, libIDL, libjpeg, zlib, dbus, dbus-glib, bzip2, xorg
+, freetype, fontconfig, file, nspr, nss, libnotify
+, yasm, libGLU_combined, sqlite, unzip
+, hunspell, libevent, libstartup_notification
+, icu, libpng, jemalloc
+, autoconf213, which, m4
+, writeScript, xidel, common-updater-scripts, coreutils, gnused, gnugrep, curl
+, cargo, rustc, llvmPackages
+, enableGTK3 ? false, gtk3, gnome3, wrapGAppsHook, makeWrapper
+, enableCalendar ? true
 , debugBuild ? false
-, # If you want the resulting program to call itself "Thunderbird"
-  # instead of "Shredder", enable this option.  However, those
+, # If you want the resulting program to call itself "Thunderbird" instead
+  # of "Earlybird" or whatever, enable this option.  However, those
   # binaries may not be distributed without permission from the
   # Mozilla Foundation, see
   # http://www.mozilla.org/foundation/trademarks/.
   enableOfficialBranding ? false
+, makeDesktopItem
 }:
 
-let version = "31.1.2"; in
-let verName = "${version}"; in
-
-stdenv.mkDerivation rec {
-  name = "thunderbird-${verName}";
+let
+  wrapperTool = if enableGTK3 then wrapGAppsHook else makeWrapper;
+  gcc = if stdenv.cc.isGNU then stdenv.cc.cc else stdenv.cc.cc.gcc;
+in stdenv.mkDerivation rec {
+  name = "thunderbird-${version}";
+  version = "60.3.3";
 
   src = fetchurl {
-    url = "ftp://ftp.mozilla.org/pub/thunderbird/releases/${verName}/source/thunderbird-${verName}.source.tar.bz2";
-    sha1 = "a3983e7d29bd70e8117ca26f5b9873c68675caa9";
+    url = "mirror://mozilla/thunderbird/releases/${version}/source/thunderbird-${version}.source.tar.xz";
+    sha512 = "04m6mgm4nfnq3nfkv0d1al5b7bw95kfcjpyd7aschqi6wnn21g8qacx42ynj89i5l9vc1jx8nz0wy266sy6x5iv9q585c6l6j9gvkrh";
   };
 
-  buildInputs = # from firefox30Pkgs.xulrunner, but without gstreamer and libvpx
-    [ pkgconfig libpng gtk perl zip libIDL libjpeg zlib bzip2
-      python dbus dbus_glib pango freetype fontconfig xlibs.libXi
-      xlibs.libX11 xlibs.libXrender xlibs.libXft xlibs.libXt file
-      alsaLib nspr nss libnotify xlibs.pixman yasm mesa
-      xlibs.libXScrnSaver xlibs.scrnsaverproto pysqlite
-      xlibs.libXext xlibs.xextproto sqlite unzip makeWrapper
-      hunspell libevent libstartup_notification cairo icu
-    ] ++ [ m4 ];
+  # from firefox, but without sound libraries
+  buildInputs =
+    [ gtk2 zip libIDL libjpeg zlib bzip2
+      dbus dbus-glib pango freetype fontconfig xorg.libXi
+      xorg.libX11 xorg.libXrender xorg.libXft xorg.libXt file
+      nspr nss libnotify xorg.pixman yasm libGLU_combined
+      xorg.libXScrnSaver xorg.scrnsaverproto
+      xorg.libXext xorg.xextproto sqlite unzip
+      hunspell libevent libstartup_notification /* cairo */
+      icu libpng jemalloc
+    ]
+    ++ lib.optionals enableGTK3 [ gtk3 gnome3.defaultIconTheme ];
 
-  configureFlags = [ "--enable-application=mail" ]
-    # from firefox30Pkgs.commonConfigureFlags, but without gstreamer and libvpx
-    ++ [
+  # from firefox + m4 + wrapperTool
+  nativeBuildInputs = [ m4 autoconf213 which gnused pkgconfig perl python wrapperTool cargo rustc ];
+
+  patches = [
+    # Remove buildconfig.html to prevent a dependency on clang etc.
+    ../../browsers/firefox/no-buildconfig.patch
+  ];
+
+  configureFlags =
+    [ # from firefox, but without sound libraries (alsa, libvpx, pulseaudio)
+      "--enable-application=comm/mail"
+      "--disable-alsa"
+      "--disable-pulseaudio"
+
       "--with-system-jpeg"
       "--with-system-zlib"
       "--with-system-bz2"
       "--with-system-nspr"
       "--with-system-nss"
       "--with-system-libevent"
-      #"--with-system-libvpx"
-      "--with-system-png"
+      "--with-system-png" # needs APNG support
       "--with-system-icu"
+      "--enable-rust-simd"
       "--enable-system-ffi"
       "--enable-system-hunspell"
       "--enable-system-pixman"
       "--enable-system-sqlite"
-      "--enable-system-cairo"
-      "--disable-gstreamer"
+      #"--enable-system-cairo"
       "--enable-startup-notification"
-      # "--enable-content-sandbox"            # available since 26.0, but not much info available
-      # "--enable-content-sandbox-reporter"   # keeping disabled for now
       "--disable-crashreporter"
       "--disable-tests"
       "--disable-necko-wifi" # maybe we want to enable this at some point
-      "--disable-installer"
       "--disable-updater"
-      "--disable-pulseaudio"
-    ] ++ (if debugBuild then [ "--enable-debug" "--enable-profiling"]
-                        else [ "--disable-debug" "--enable-release"
-                               "--enable-optimize" "--enable-strip" ])
-    ++ [
-      "--disable-javaxpcom"
-      "--enable-stdcxx-compat" # Avoid dependency on libstdc++ 4.7
+      "--enable-jemalloc"
+      "--disable-gconf"
+      "--enable-default-toolkit=cairo-gtk${if enableGTK3 then "3" else "2"}"
+      "--enable-js-shell"
     ]
-    ++ stdenv.lib.optional enableOfficialBranding "--enable-official-branding";
+      ++ lib.optional enableCalendar "--enable-calendar"
+      ++ (if debugBuild then [ "--enable-debug" "--enable-profiling"]
+                        else [ "--disable-debug" "--enable-release"
+                               "--disable-debug-symbols"
+                               "--enable-optimize" "--enable-strip" ])
+      ++ lib.optional enableOfficialBranding "--enable-official-branding"
+      ++ lib.optionals (lib.versionAtLeast version "56" && !stdenv.hostPlatform.isi686) [
+        # on i686-linux: --with-libclang-path is not available in this configuration
+        "--with-libclang-path=${llvmPackages.libclang}/lib"
+        "--with-clang-path=${llvmPackages.clang}/bin/clang"
+      ];
 
-  configurePhase = ''
-    patchShebangs .
+  enableParallelBuilding = true;
 
-    echo '${stdenv.lib.concatMapStrings (s : "ac_add_options ${s}\n") configureFlags}' > .mozconfig
-    echo "ac_add_options --prefix='$out'" >> .mozconfig
-    echo "mk_add_options MOZ_MAKE_FLAGS='-j$NIX_BUILD_CORES'" >> .mozconfig
+  preConfigure =
+    ''
+      cxxLib=$( echo -n ${gcc}/include/c++/* )
+      archLib=$cxxLib/$( ${gcc}/bin/gcc -dumpmachine )
+  
+      test -f layout/style/ServoBindings.toml && sed -i -e '/"-DRUST_BINDGEN"/ a , "-cxx-isystem", "'$cxxLib'", "-isystem", "'$archLib'"' layout/style/ServoBindings.toml
 
-    make ${makeFlags} configure
-  '';
+      configureScript="$(realpath ./configure)"
+      mkdir ../objdir
+      cd ../objdir
+    '';
 
-  makeFlags = "-f client.mk";
-  buildFlags = "build";
+  preInstall =
+    ''
+      # The following is needed for startup cache creation on grsecurity kernels.
+      paxmark m ../objdir/dist/bin/xpcshell
+    '';
 
+  dontWrapGApps = true; # we do it ourselves
   postInstall =
     ''
+      # For grsecurity kernels
+      paxmark m $out/lib/thunderbird/thunderbird
+
+      # TODO: Move to a dev output?
       rm -rf $out/include $out/lib/thunderbird-devel-* $out/share/idl
 
-      # Create a desktop item.
-      mkdir -p $out/share/applications
-      cat > $out/share/applications/thunderbird.desktop <<EOF
-      [Desktop Entry]
-      Type=Application
-      Exec=$out/bin/thunderbird
-      Icon=$out/lib/thunderbird-${version}/chrome/icons/default/default256.png
-      Name=Thunderbird
-      GenericName=Mail Reader
-      Categories=Application;Network;
-      EOF
+      # $binary is a symlink to $target.
+      # We wrap $target by replacing the $binary symlink.
+      local target="$out/lib/thunderbird/thunderbird"
+      local binary="$out/bin/thunderbird"
+
+      # Wrap correctly, this is needed to
+      # 1) find Mozilla runtime, because argv0 must be the real thing,
+      #    or a symlink thereto. It cannot be the wrapper itself
+      # 2) detect itself as the default mailreader across builds
+      gappsWrapperArgs+=(
+        --argv0 "$target"
+        --set MOZ_APP_LAUNCHER thunderbird
+      )
+      ${
+        # We wrap manually because wrapGAppsHook does not detect the symlink
+        # To mimic wrapGAppsHook, we run it with dontWrapGApps, so
+        # gappsWrapperArgs gets defined correctly
+        lib.optionalString enableGTK3 "wrapGAppsHook"
+      }
+
+      # "$binary" is a symlink, replace it by the wrapper
+      rm "$binary"
+      makeWrapper "$target" "$binary" "''${gappsWrapperArgs[@]}"
+
+      ${ let desktopItem = makeDesktopItem {
+          name = "thunderbird";
+          exec = "thunderbird %U";
+          desktopName = "Thunderbird";
+          icon = "$out/lib/thunderbird/chrome/icons/default/default256.png";
+          genericName = "Mail Reader";
+          categories = "Application;Network";
+          mimeType = stdenv.lib.concatStringsSep ";" [
+            # Email
+            "x-scheme-handler/mailto"
+            "message/rfc822"
+            # Newsgroup
+            "x-scheme-handler/news"
+            "x-scheme-handler/snews"
+            "x-scheme-handler/nntp"
+            # Feed
+            "x-scheme-handler/feed"
+            "application/rss+xml"
+            "application/x-extension-rss"
+          ];
+        }; in desktopItem.buildCommand
+      }
     '';
+
+  postFixup =
+    # Fix notifications. LibXUL uses dlopen for this, unfortunately; see #18712.
+    ''
+      patchelf --set-rpath "${lib.getLib libnotify
+        }/lib:$(patchelf --print-rpath "$out"/lib/thunderbird*/libxul.so)" \
+          "$out"/lib/thunderbird*/libxul.so
+    '';
+
+  doInstallCheck = true;
+  installCheckPhase =
+    ''
+      # Some basic testing
+      "$out/bin/thunderbird" --version
+    '';
+
+  disallowedRequisites = [ stdenv.cc ];
 
   meta = with stdenv.lib; {
     description = "A full-featured e-mail client";
@@ -109,5 +197,11 @@ stdenv.mkDerivation rec {
       if enableOfficialBranding then licenses.proprietary else licenses.mpl11;
     maintainers = [ maintainers.pierron maintainers.eelco ];
     platforms = platforms.linux;
+  };
+
+  passthru.updateScript = import ./../../browsers/firefox/update.nix {
+    attrPath = "thunderbird";
+    baseUrl = "http://archive.mozilla.org/pub/thunderbird/releases/";
+    inherit stdenv writeScript lib common-updater-scripts xidel coreutils gnused gnugrep curl;
   };
 }

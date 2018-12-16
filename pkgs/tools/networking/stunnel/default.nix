@@ -2,19 +2,34 @@
 
 stdenv.mkDerivation rec {
   name    = "stunnel-${version}";
-  version = "5.05";
+  version = "5.50";
 
   src = fetchurl {
-    url    = "http://www.stunnel.org/downloads/${name}.tar.gz";
-    # SHA256 provided by upstream.
-    sha256 = "c7e1653345150db7e48d00e1129cf571c7c85de8e7e1aa70b21cf1d76b1e31ef";
+    url    = "https://www.stunnel.org/downloads/${name}.tar.gz";
+    sha256 = "0j811iakljjxw39qchmqf235jdkwixb0i4xxjyi55f08558947cm";
+    # please use the contents of "https://www.stunnel.org/downloads/${name}.tar.gz.sha256",
+    # not the output of `nix-prefetch-url`
   };
 
   buildInputs = [ openssl ];
-  configureFlags = [ "--with-ssl=${openssl}" ];
+  configureFlags = [
+    "--with-ssl=${openssl.dev}"
+    "--sysconfdir=/etc"
+    "--localstatedir=/var"
+  ];
+
+  postInstall = ''
+    # remove legacy compatibility-wrapper that would require perl
+    rm $out/bin/stunnel3
+  '';
+
+  installFlags = [
+    "sysconfdir=\${out}/etc"
+    "localstatedir=\${TMPDIR}"
+  ];
 
   meta = {
-    description = "universal tls/ssl wrapper";
+    description = "Universal tls/ssl wrapper";
     homepage    = "http://www.stunnel.org/";
     license     = stdenv.lib.licenses.gpl2Plus;
     platforms   = stdenv.lib.platforms.unix;

@@ -1,22 +1,49 @@
-{ stdenv, fetchurl, pkgconfig, glib, fuse }:
+{ stdenv, fetchFromGitHub, meson, pkgconfig, ninja, docutils
+, fuse3, glib
+, which, python3Packages
+}:
 
 stdenv.mkDerivation rec {
-  name = "sshfs-fuse-2.5";
-  
-  src = fetchurl {
-    url = "mirror://sourceforge/fuse/${name}.tar.gz";
-    sha256 = "0gp6qr33l2p0964j0kds0dfmvyyf5lpgsn11daf0n5fhwm9185z9";
+  version = "3.5.0";
+  name = "sshfs-fuse-${version}";
+
+  src = fetchFromGitHub {
+    owner = "libfuse";
+    repo = "sshfs";
+    rev = "sshfs-${version}";
+    sha256 = "1mczf13ic5ycfhcxmxma50n5h32vygcll0d8m39vam237s95aqy6";
   };
-  
-  buildInputs = [ pkgconfig glib fuse ];
+
+  nativeBuildInputs = [ meson pkgconfig ninja docutils ];
+  buildInputs = [ fuse3 glib ];
+  checkInputs = [ which python3Packages.pytest ];
+
+  NIX_CFLAGS_COMPILE = stdenv.lib.optional
+    (stdenv.hostPlatform.system == "i686-linux")
+    "-D_FILE_OFFSET_BITS=64";
+
   postInstall = ''
     mkdir -p $out/sbin
     ln -sf $out/bin/sshfs $out/sbin/mount.sshfs
   '';
 
-  meta = {
-    homepage = http://fuse.sourceforge.net/sshfs.html;
+  #doCheck = true;
+  checkPhase = ''
+    # The tests need fusermount:
+    mkdir bin && cp ${fuse3}/bin/fusermount3 bin/fusermount
+    export PATH=bin:$PATH
+    # Can't access /dev/fuse within the sandbox: "FUSE kernel module does not seem to be loaded"
+    substituteInPlace test/util.py --replace "/dev/fuse" "/dev/null"
+    # TODO: "fusermount executable not setuid, and we are not root"
+    # We should probably use a VM test instead
+    python3 -m pytest test/
+  '';
+
+  meta = with stdenv.lib; {
+    inherit (src.meta) homepage;
     description = "FUSE-based filesystem that allows remote filesystems to be mounted over SSH";
-    platforms = stdenv.lib.platforms.linux;
+    platforms = platforms.linux;
+    license = licenses.gpl2;
+    maintainers = with maintainers; [ primeos ];
   };
 }

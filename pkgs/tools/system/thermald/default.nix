@@ -1,20 +1,26 @@
-{ stdenv, fetchurl, unzip, autoconf, automake, libtool, pkgconfig, dbus_libs, dbus_glib, libxml2 }:
+{ stdenv, fetchFromGitHub, autoconf, automake, libtool
+, pkgconfig, dbus, dbus-glib, libxml2 }:
 
 stdenv.mkDerivation rec {
-  version = "1.3";
   name = "thermald-${version}";
-  src = fetchurl {
-    url = "https://github.com/01org/thermal_daemon/archive/v${version}.zip";
-    sha256 = "0jqxc8vvd4lx4z0kcdisk8lpdf823nysvjcfjxlr5wzla1xysqwc";
+  version = "1.8";
+
+  src = fetchFromGitHub {
+    owner = "01org";
+    repo = "thermal_daemon";
+    rev = "v${version}";
+    sha256 = "1g1l7k8yxj8bl1ysdx8v6anv1s7xk9j072y44gwki70dy48n7j92";
   };
-  buildInputs = [ unzip autoconf automake libtool pkgconfig dbus_libs dbus_glib libxml2 ];
+
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ autoconf automake libtool dbus dbus-glib libxml2 ];
 
   patchPhase = ''sed -e 's/upstartconfdir = \/etc\/init/upstartconfdir = $(out)\/etc\/init/' -i data/Makefile.am'';
 
   preConfigure = ''
-                   export PKG_CONFIG_PATH="${dbus_libs}/lib/pkgconfig:$PKG_CONFIG_PATH"
-                   ./autogen.sh #--prefix="$out"
-                 '';
+    export PKG_CONFIG_PATH="${dbus.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
+    ./autogen.sh
+  '';
 
   configureFlags = [
     "--sysconfdir=$(out)/etc" "--localstatedir=/var"
@@ -22,15 +28,11 @@ stdenv.mkDerivation rec {
     "--with-systemdsystemunitdir=$(out)/etc/systemd/system"
     ];
 
-  preInstall = "sysconfdir=$out/etc";
-
-
-  meta = {
+  meta = with stdenv.lib; {
     description = "Thermal Daemon";
-    longDescription = ''
-         Thermal Daemon
-    '';
     homepage = https://01.org/linux-thermal-daemon;
-    license = stdenv.lib.licenses.gpl2;
+    license = licenses.gpl2;
+    platforms = [ "x86_64-linux" "i686-linux" ];
+    maintainers = with maintainers; [ abbradar ];
   };
 }

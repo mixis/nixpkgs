@@ -1,38 +1,54 @@
-{ stdenv, fetchurl, pkgconfig, intltool, perl, perlXMLParser
-, goffice, makeWrapper, gtk3, gnome_icon_theme
+{ stdenv, fetchurl, pkgconfig, intltool, perlPackages
+, goffice, gnome3, makeWrapper, gtk3, bison, pythonPackages
+, itstool
 }:
 
-stdenv.mkDerivation rec {
-  name = "gnumeric-1.12.12";
+let
+  inherit (pythonPackages) python pygobject3;
+  isopub = fetchurl { url = http://www.oasis-open.org/docbook/xml/4.5/ent/isopub.ent; sha256 = "073l492jz70chcadr2p7ssx7gz5hd731s2cazhxx4r845kilyr77"; };
+  isonum = fetchurl { url = http://www.oasis-open.org/docbook/xml/4.5/ent/isonum.ent; sha256 = "04b62dw2g3cj9i4vn9xyrsrlz8fpmmijq98dm0nrkky31bwbbrs3"; };
+  isogrk1 = fetchurl { url = http://www.oasis-open.org/docbook/xml/4.5/ent/isogrk1.ent; sha256 = "04b23anhs5wr62n4rgsjirzvw7rpjcsf8smz4ffzaqh3b0vw90vm"; };
+in stdenv.mkDerivation rec {
+  name = "gnumeric-1.12.43";
 
   src = fetchurl {
     url = "mirror://gnome/sources/gnumeric/1.12/${name}.tar.xz";
-    sha256 = "096i9x6b4i6x24vc4lsxx8fg2n2pjs2jb6x3bkg3ppa2c60w1jq0";
+    sha256 = "87c9abd6260cf29401fa1e0fcce374e8c7bcd1986608e4049f6037c9d32b5fd5";
   };
 
-  preConfigure = ''sed -i 's/\(SUBDIRS.*\) doc/\1/' Makefile.in''; # fails when installing docs
+  configureFlags = [ "--disable-component" ];
 
-  configureFlags = "--disable-component";
+  prePatch = ''
+    substituteInPlace doc/C/gnumeric.xml \
+      --replace http://www.oasis-open.org/docbook/xml/4.5/ent/isopub.ent ${isopub} \
+      --replace http://www.oasis-open.org/docbook/xml/4.5/ent/isonum.ent ${isonum} \
+      --replace http://www.oasis-open.org/docbook/xml/4.5/ent/isogrk1.ent ${isogrk1}
+  '';
 
-  # ToDo: optional libgda, python, introspection?
+  nativeBuildInputs = [ pkgconfig ];
+
+  # ToDo: optional libgda, introspection?
   buildInputs = [
-    pkgconfig intltool perl perlXMLParser
-    goffice gtk3 makeWrapper
-  ];
+    intltool bison
+    goffice gtk3 makeWrapper gnome3.defaultIconTheme
+    python pygobject3 itstool
+  ] ++ (with perlPackages; [ perl XMLParser ]);
+
+  enableParallelBuilding = true;
 
   preFixup = ''
     for f in "$out"/bin/gnumeric-*; do
       wrapProgram $f \
-        --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH"
+        --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH" \
+        ${stdenv.lib.optionalString (!stdenv.isDarwin) "--prefix GIO_EXTRA_MODULES : '${stdenv.lib.getLib gnome3.dconf}/lib/gio/modules'"}
     done
-    rm $out/share/icons/hicolor/icon-theme.cache
   '';
 
   meta = with stdenv.lib; {
     description = "The GNOME Office Spreadsheet";
     license = stdenv.lib.licenses.gpl2Plus;
     homepage = http://projects.gnome.org/gnumeric/;
-    platforms = platforms.linux;
+    platforms = platforms.unix;
     maintainers = [ maintainers.vcunat ];
   };
 }

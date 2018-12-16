@@ -1,35 +1,22 @@
-{ stdenv, fetchurl, unzip, cmake}:
-
+{ stdenv, cmake, ninja, fetchFromGitHub }:
 stdenv.mkDerivation rec {
-  version = "1.7.0";
   name = "gtest-${version}";
+  version = "1.8.1";
 
-  src = fetchurl {
-    url = "https://googletest.googlecode.com/files/${name}.zip";
-    sha256="03fnw3bizw9bcx7l5qy1vz7185g33d5pxqcb6aqxwlrzv26s2z14";
+  src = fetchFromGitHub {
+    owner = "google";
+    repo = "googletest";
+    rev = "release-${version}";
+    sha256 = "0270msj6n7mggh4xqqjp54kswbl7mkcc8px1p5dqdpmw5ngh9fzk";
   };
 
-  buildInputs = [ unzip cmake ];
-
-  configurePhase = ''
-    mkdir build
-    cd build
-    cmake ../ -DCMAKE_INSTALL_PREFIX=$out
-  '';
-
-  installPhase = ''
-    mkdir -p $out/lib
-    cp -v libgtest.a libgtest_main.a $out/lib
-    cp -v -r ../include $out
-    cp -v -r ../src $out
-  '';
+  nativeBuildInputs = [ cmake ninja ];
 
   meta = with stdenv.lib; {
-    description = "Google test: Google's framework for writing C++ tests.";
-    homepage = https://code.google.com/p/googletest/;
+    description = "Google's framework for writing C++ tests";
+    homepage = https://github.com/google/googletest;
     license = licenses.bsd3;
     platforms = platforms.all;
-    maintainers = with maintainers; [ zoomulator ];
+    maintainers = with maintainers; [ zoomulator ivan-tkatchev ];
   };
 }
-

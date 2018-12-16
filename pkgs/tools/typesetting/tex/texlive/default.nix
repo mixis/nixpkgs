@@ -1,152 +1,206 @@
-args : with args;
-rec {
-  src = fetchurl {
-    url = mirror://debian/pool/main/t/texlive-bin/texlive-bin_2014.20140926.35254.orig.tar.xz;
-    sha256 = "1c39x059jhn5jsy6i9j3akjbkm1kmmzssy1jyi1aw20rl2vp86w3";
+/* TeX Live user docs
+  - source: ../../../../../doc/languages-frameworks/texlive.xml
+  - current html: http://nixos.org/nixpkgs/manual/#sec-language-texlive
+*/
+{ stdenv, lib, fetchurl, runCommand, writeText, buildEnv
+, callPackage, ghostscriptX, harfbuzz, poppler_min
+, makeWrapper, python, ruby, perl
+, useFixedHashes ? true
+, recurseIntoAttrs
+}:
+let
+  # various binaries (compiled)
+  bin = callPackage ./bin.nix {
+    poppler = poppler_min; # otherwise depend on various X stuff
+    ghostscript = ghostscriptX;
+    harfbuzz = harfbuzz.override {
+      withIcu = true; withGraphite2 = true;
+    };
   };
 
-  texmfVersion = "2014.20140927";
-  texmfSrc = fetchurl {
-    url = "mirror://debian/pool/main/t/texlive-base/texlive-base_${texmfVersion}.orig.tar.xz";
-    sha256 = "1g4nzr9rgmw8i0i82svmkwjy2kvbyrc8jgnk2f3cl2wsx7sfrydy";
+  # map: name -> fixed-output hash
+  # sha1 in base32 was chosen as a compromise between security and length
+  fixedHashes = lib.optionalAttrs useFixedHashes (import ./fixedHashes.nix);
+
+  # function for creating a working environment from a set of TL packages
+  combine = import ./combine.nix {
+    inherit bin combinePkgs buildEnv fastUnique lib makeWrapper writeText
+      stdenv python ruby perl;
+    ghostscript = ghostscriptX; # could be without X, probably, but we use X above
   };
 
-  langTexmfVersion = "2014.20140927";
-  langTexmfSrc = fetchurl {
-    url = "mirror://debian/pool/main/t/texlive-lang/texlive-lang_${langTexmfVersion}.orig.tar.xz";
-    sha256 = "1ckm8yra96m44n708dc1kgq4xrzi7ginxpsb73ijbwzbjy1yqzwg";
-  };
+  # the set of TeX Live packages, collections, and schemes; using upstream naming
+  tl = let
+    orig = import ./pkgs.nix tl;
+    removeSelfDep = lib.mapAttrs
+      (n: p: if p ? deps then p // { deps = lib.filterAttrs (dn: _: n != dn) p.deps; }
+                         else p);
+    clean = removeSelfDep (orig // {
+      # overrides of texlive.tlpdb
 
-  passthru = { inherit texmfSrc langTexmfSrc; };
+      dvidvi = orig.dvidvi // {
+        hasRunfiles = false; # only contains docs that's in bin.core.doc already
+      };
+      texlive-msg-translations = orig.texlive-msg-translations // {
+        hasRunfiles = false; # only *.po for tlmgr
+      };
 
-  setupHook = ./setup-hook.sh;
+      xdvi = orig.xdvi // { # it seems to need it to transform fonts
+        deps = (orig.xdvi.deps or {}) // { inherit (tl) metafont; };
+      };
 
-  doMainBuild = fullDepEntry ( stdenv.lib.optionalString stdenv.isDarwin ''
-    export MACOSX_DEPLOYMENT_TARGET=10.9
-    export DYLD_LIBRARY_PATH="${poppler}/lib"
-  '' + ''
-    mkdir -p $out
-    mkdir -p $out/nix-support
-    cp ${setupHook} $out/nix-support/setup-hook.sh
-    mkdir -p $out/share
-    tar xf ${texmfSrc} -C $out --strip-components=1
-    tar xf ${langTexmfSrc} -C $out --strip-components=1
+      # remove dependency-heavy packages from the basic collections
+      collection-basic = orig.collection-basic // {
+        deps = removeAttrs orig.collection-basic.deps [ "metafont" "xdvi" ];
+      };
+      # add them elsewhere so that collections cover all packages
+      collection-metapost = orig.collection-metapost // {
+        deps = orig.collection-metapost.deps // { inherit (tl) metafont; };
+      };
+      collection-plaingeneric = orig.collection-plaingeneric // {
+        deps = orig.collection-plaingeneric.deps // { inherit (tl) xdvi; };
+      };
+    }); # overrides
 
-    sed -e s@/usr/bin/@@g -i $(grep /usr/bin/ -rl . )
+    # tl =
+    in lib.mapAttrs flatDeps clean;
+    # TODO: texlive.infra for web2c config?
 
-    sed -e 's@dehypht-x-2013-05-26@dehypht-x-2014-05-21@' -i $(grep 'dehypht-x' -rl $out )
-    sed -e 's@dehyphn-x-2013-05-26@dehyphn-x-2014-05-21@' -i $(grep 'dehyphn-x' -rl $out )
 
-    sed -e 's@\<env ruby@${ruby}/bin/ruby@' -i $(grep 'env ruby' -rl . )
-    sed -e 's@\<env perl@${perl}/bin/perl@' -i $(grep 'env perl' -rl . )
-    sed -e 's@\<env python@${python}/bin/python@' -i $(grep 'env python' -rl . )
+  flatDeps = pname: attrs:
+    let
+      version = attrs.version or bin.texliveYear;
+      mkPkgV = tlType: let
+        pkg = attrs // {
+          sha512 = attrs.sha512.${tlType};
+          inherit pname tlType version;
+        };
+        in mkPkg pkg;
+    in {
+      # TL pkg contains lists of packages: runtime files, docs, sources, binaries
+      pkgs =
+        # tarball of a collection/scheme itself only contains a tlobj file
+        [( if (attrs.hasRunfiles or false) then mkPkgV "run"
+            # the fake derivations are used for filtering of hyphenation patterns
+          else { inherit pname version; tlType = "run"; }
+        )]
+        ++ lib.optional (attrs.sha512 ? "doc") (mkPkgV "doc")
+        ++ lib.optional (attrs.sha512 ? "source") (mkPkgV "source")
+        ++ lib.optional (bin ? ${pname})
+            ( bin.${pname} // { inherit pname; tlType = "bin"; } )
+        ++ combinePkgs (attrs.deps or {});
+    };
 
-    sed -e '/ubidi_open/i#include <unicode/urename.h>' -i $(find . -name configure)
-    sed -e 's/-lttf/-lfreetype/' -i $(find . -name configure)
+  # create a derivation that contains an unpacked upstream TL package
+  mkPkg = { pname, tlType, version, sha512, postUnpack ? "", stripPrefix ? 1, ... }@args:
+    let
+      # the basename used by upstream (without ".tar.xz" suffix)
+      urlName = pname + lib.optionalString (tlType != "run") ".${tlType}";
+      tlName = urlName + "-${version}";
+      fixedHash = fixedHashes.${tlName} or null; # be graceful about missing hashes
 
-    # sed -e s@ncurses/curses.h@curses.h@g -i $(grep ncurses/curses.h -rl . )
-    sed -e '1i\#include <string.h>\n\#include <stdlib.h>' -i $( find libs/teckit -name '*.cpp' -o -name '*.c' )
+      urls = args.urls or (if args ? url then [ args.url ] else
+              map (up: "${up}/${urlName}.tar.xz") urlPrefixes
+            );
 
-    NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${icu}/include/layout";
+      # Upstream refuses to distribute stable tarballs,
+      # so we host snapshots on IPFS or on our own servers.
+      # Common packages should get served from the binary cache anyway.
+      # See discussions, e.g. https://github.com/NixOS/nixpkgs/issues/24683
+      urlPrefixes = args.urlPrefixes or [
+        # A snapshot temporarily hosted by @xeji.
+        # TODO: remove when there is a reliable long-term solution
+        https://cat3.de/texlive-2018/tlnet/archive
 
-    ./Build --prefix="$out" --datadir="$out/share" --mandir="$out/share/man" --infodir="$out/share/info" \
-      ${args.lib.concatStringsSep " " configureFlags}
-    cd Work
-  '' ) [ "minInit" "doUnpack" "addInputs" "defEnsureDir" ];
+        # TODO: Add second, faster and more reliable snapshot mirror,
+        # maybe on one of our project's servers
 
-  promoteLibexec = fullDepEntry (''
-    mkdir -p $out/libexec/
-    mv $out/bin $out/libexec/$(uname -m)
-    mkdir -p $out/bin
-    for i in "$out/libexec/"* "$out/libexec/"*/* ; do
-        test \( \! -d "$i" \) -a \( -x "$i" -o -L "$i" \) || continue
+        # IPFS seeded by the mirror above - this may be quite slow
+        https://ipfs.io/ipfs/QmT4Z67wXin1Z9DhvqwSSkSZSuu8hT6LgDyMu6CBm9Tb7t/tlnet/archive
 
-      if [ -x "$i" ]; then
-          echo -ne "#! $SHELL\\nexec $i \"\$@\"" >$out/bin/$(basename $i)
-                chmod a+x $out/bin/$(basename $i)
-      else
-          mv "$i" "$out/libexec"
-          ln -s "$(readlink -f "$out/libexec/$(basename "$i")")" "$out/bin/$(basename "$i")";
-          ln -sf "$(readlink -f "$out/libexec/$(basename "$i")")" "$out/libexec/$(uname -m)/$(basename "$i")";
-          rm "$out/libexec/$(basename "$i")"
-      fi;
-    done
-  '') ["doMakeInstall"];
+        # The canonical source moves quickly and will be broken almost immediately
+        http://mirror.ctan.org/tex-archive/systems/texlive/tlnet/archive
 
-  doPostInstall = fullDepEntry( ''
-    cp -r "$out/"texmf* "$out/share/" || true
-    rm -rf "$out"/texmf*
-    [ -d $out/share/texmf-config ] || ln -s $out/share/texmf-dist $out/share/texmf-config
-    ln -s "$out"/share/texmf* "$out"/
+        # Should be stable for historic, archived releases
+        # http://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2018/tlnet-final/archive
+        # TODO: use this later when 2018 is archived
 
-    PATH=$PATH:$out/bin mktexlsr $out/share/texmf*
+      ];
 
-    HOME=. PATH=$PATH:$out/bin updmap-sys --syncwithtrees
+      src = fetchurl { inherit urls sha512; };
 
-    # Prebuild the format files, as it used to be done with TeXLive 2007.
-    # Luatex currently fails this way:
-    #
-    #   This is a summary of all `failed' messages:
-    #   `luatex -ini  -jobname=luatex -progname=luatex luatex.ini' failed
-    #   `luatex -ini  -jobname=dviluatex -progname=dviluatex dviluatex.ini' failed
-    #
-    # I find it acceptable, hence the "|| true".
-    echo "building format files..."
-    mkdir -p "$out/share/texmf-var/web2c"
-    ln -sf "$out"/out/share/texmf* "$out"/
-    PATH="$PATH:$out/bin" fmtutil-sys --all || true
+      passthru = {
+        inherit pname tlType version;
+      } // lib.optionalAttrs (sha512 != "") { inherit src; };
+      unpackCmd = file: ''
+        tar -xf ${file} \
+          '--strip-components=${toString stripPrefix}' \
+          -C "$out" --anchored --exclude=tlpkg --keep-old-files
+      '' + postUnpack;
 
-    PATH=$PATH:$out/bin mktexlsr $out/share/texmf*
-  '' + stdenv.lib.optionalString stdenv.isDarwin ''
-    for prog in $out/bin/*; do
-      wrapProgram "$prog" --prefix DYLD_LIBRARY_PATH : "${poppler}/lib"
-    done
-  '' ) [ "minInit" "defEnsureDir" "doUnpack" "doMakeInstall" "promoteLibexec" "patchShebangsInterim"];
+    in if sha512 == "" then
+      # hash stripped from pkgs.nix to save space -> fetch&unpack in a single step
+      fetchurl {
+        inherit urls;
+        sha1 = if fixedHash == null then throw "TeX Live package ${tlName} is missing hash!"
+          else fixedHash;
+        name = tlName;
+        recursiveHash = true;
+        downloadToTemp = true;
+        postFetch = ''mkdir "$out";'' + unpackCmd "$downloadedFile";
+        # TODO: perhaps override preferHashedMirrors and allowSubstitutes
+     }
+        // passthru
 
-  patchShebangsInterimBin = doPatchShebangs ''$out/bin/'';
-  patchShebangsInterimLibexec = doPatchShebangs ''$out/libexec/'';
-  patchShebangsInterimShareTexmfDist = doPatchShebangs ''$out/share/texmf-dist/scripts/'';
-  patchShebangsInterimTexmfDist = doPatchShebangs ''$out/texmf-dist/scripts/'';
+    else runCommand "texlive-${tlName}"
+      ( { # lots of derivations, not meant to be cached
+          preferLocalBuild = true; allowSubstitutes = false;
+          inherit passthru;
+        } // lib.optionalAttrs (fixedHash != null) {
+          outputHash = fixedHash;
+          outputHashAlgo = "sha1";
+          outputHashMode = "recursive";
+        }
+      )
+      ( ''
+          mkdir "$out"
+        '' + unpackCmd "'${src}'"
+      );
 
-  patchShebangsInterim = fullDepEntry ("") ["patchShebangsInterimBin"
-    "patchShebangsInterimLibexec" "patchShebangsInterimTexmfDist"
-    "patchShebangsInterimShareTexmfDist"];
+  # combine a set of TL packages into a single TL meta-package
+  combinePkgs = pkgSet: lib.concatLists # uniqueness is handled in `combine`
+    (lib.mapAttrsToList (_n: a: a.pkgs) pkgSet);
 
-  buildInputs = [ zlib bzip2 ncurses libpng flex bison libX11 libICE xproto
-    freetype t1lib gd libXaw icu ghostscript ed libXt libXpm libXmu libXext
-    xextproto perl libSM ruby expat curl libjpeg python fontconfig xz pkgconfig
-    poppler libpaper graphite2 lesstif zziplib harfbuzz texinfo potrace gmp mpfr
-    xpdf ]
-    ++ stdenv.lib.optionals stdenv.isDarwin [ makeWrapper ]
-    ;
+  # TODO: replace by buitin once it exists
+  fastUnique = comparator: list: with lib;
+    let un_adj = l: if length l < 2 then l
+      else optional (head l != elemAt l 1) (head l) ++ un_adj (tail l);
+    in un_adj (lib.sort comparator list);
 
-  configureFlags = [ "--with-x11" "--enable-ipc" "--with-mktexfmt"
-    "--enable-shared" "--disable-native-texlive-build" "--with-system-zziplib"
-    "--with-system-libgs" "--with-system-t1lib" "--with-system-freetype2"
-    "--with-system-freetype=no" "--disable-ttf2pk" "--enable-ttf2pk2" ]
-    ++ stdenv.lib.optionals stdenv.isDarwin [
-      # TODO: We should be able to fix these tests
-      "--disable-devnag"
+in
+  tl // {
+    inherit bin combine;
 
-      # jww (2014-06-02): The following fails with:
-      # FAIL: tests/dvisvgm
-      # ===================
-      #
-      # dyld: Library not loaded: libgs.dylib.9.06
-      #   Referenced from: .../Work/texk/dvisvgm/.libs/dvisvgm
-      #   Reason: image not found
-      "--disable-dvisvgm"
-    ];
-
-  phaseNames = [ "addInputs" "doMainBuild" "doMakeInstall" "doPostInstall" ];
-
-  name = "texlive-core-2014";
-
-  meta = with stdenv.lib; {
-    description = "A TeX distribution";
-    homepage    = http://www.tug.org/texlive;
-    license     = stdenv.lib.licenses.gpl2;
-    maintainers = with maintainers; [ lovek323 raskin jwiegley ];
-    platforms   = platforms.unix;
-  };
-}
+    # Pre-defined combined packages for TeX Live schemes,
+    # to make nix-env usage more comfortable and build selected on Hydra.
+    combined = with lib; recurseIntoAttrs (
+      mapAttrs
+        (pname: attrs:
+          addMetaAttrs rec {
+            description = "TeX Live environment for ${pname}";
+            platforms = lib.platforms.all;
+            hydraPlatforms = lib.optionals
+              (lib.elem pname ["scheme-small" "scheme-basic"]) platforms;
+            maintainers = [ lib.maintainers.vcunat ];
+          }
+          (combine {
+            ${pname} = attrs;
+            extraName = "combined" + lib.removePrefix "scheme" pname;
+          })
+        )
+        { inherit (tl)
+            scheme-basic scheme-context scheme-full scheme-gust
+            scheme-medium scheme-minimal scheme-small scheme-tetex;
+        }
+    );
+  }

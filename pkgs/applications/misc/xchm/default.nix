@@ -13,8 +13,10 @@ stdenv.mkDerivation {
     echo $NIX_LDFLAGS
   '';
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "A viewer for Microsoft HTML Help files";
     homepage = http://xchm.sourceforge.net;
+    license = licenses.gpl2;
+    platforms = platforms.linux;
   };
 }

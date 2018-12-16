@@ -1,53 +1,35 @@
-{ fetchurl, stdenv, python, alsaLib, libX11, mesa, SDL, lua5, zlib, bam }:
+{ fetchurl, stdenv, cmake, pkgconfig, makeWrapper, python, alsaLib
+, libX11, libGLU, SDL, lua5, zlib, freetype, wavpack
+}:
 
 stdenv.mkDerivation rec {
-  name = "teeworlds-0.6.1";
+  name = "teeworlds-0.6.5";
 
   src = fetchurl {
-    url = "http://www.teeworlds.com/files/${name}-source.tar.gz";
-    sha256 = "025rcz59mdqksja4akn888c8avj9j28rk86vw7w1licdp67x8a33";
+    url = "https://downloads.teeworlds.com/teeworlds-0.6.5-src.tar.gz";
+    sha256 = "07llxjc47d1gd9jqj3vf08cmw26ha6189mwcix1khwa3frfbilqb";
   };
 
-  # Note: Teeworlds requires Python 2.x to compile.  Python 3.0 will
-  # not work.
-  buildInputs = [ python alsaLib libX11 mesa SDL lua5 zlib bam ];
+  postPatch = ''
+    # we always want to use system libs instead of these
+    rm -r other/{freetype,sdl}/{include,mac,windows}
 
-  configurePhase = ''
-    bam release
+    # set compiled-in DATA_DIR so resources can be found
+    substituteInPlace src/engine/shared/storage.cpp \
+      --replace '#define DATA_DIR "data"' \
+                '#define DATA_DIR "${placeholder "out"}/share/teeworlds/data"'
   '';
 
-  installPhase = ''
-    # Copy the graphics, sounds, etc.
-    mkdir -p "$out/share/${name}"
-    cp -rv data other/icons "$out/share/${name}"
+  nativeBuildInputs = [ cmake pkgconfig ];
 
-    # Copy the executables (client, server, etc.).
-    mkdir -p "$out/bin"
-    executables=""
-    for file in *
-    do
-      if [ -f "$file" ] && [ -x "$file" ]
-      then
-          executables="$file $executables"
-      fi
-    done
-    cp -v $executables "$out/bin"
 
-    # Make sure the programs are executed from the right directory so
-    # that they can access the graphics and sounds.
-    for program in $executables
-    do
-      mv -v "$out/bin/$program" "$out/bin/.wrapped-$program"
-      cat > "$out/bin/$program" <<EOF
-#!/bin/sh
-cd "$out/share/${name}" && exec "$out/bin/.wrapped-$program" "\$@"
-EOF
-      chmod -v +x "$out/bin/$program"
-    done
+  buildInputs = [
+    python alsaLib libX11 libGLU SDL lua5 zlib freetype wavpack
+  ];
 
-    # Copy the documentation.
-    mkdir -p "$out/doc/${name}"
-    cp -v *.txt "$out/doc/${name}"
+  postInstall = ''
+    mkdir -p $out/share/doc/teeworlds
+    cp -v *.txt $out/share/doc/teeworlds/
   '';
 
   meta = {
@@ -60,7 +42,7 @@ EOF
       Flag.  You can even design your own maps!
     '';
 
-    homepage = http://teeworlds.com/;
+    homepage = https://teeworlds.com/;
     license = "BSD-style, see `license.txt'";
     maintainers = with stdenv.lib.maintainers; [ astsmtl ];
     platforms = with stdenv.lib.platforms; linux;

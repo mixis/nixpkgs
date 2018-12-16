@@ -1,25 +1,17 @@
-{ stdenv, fetchurl, utillinux }:
+{ callPackage, utillinux }:
 
-stdenv.mkDerivation rec {
-  name = "fuse-2.9.3";
-  
-  builder = ./builder.sh;
-  
-  src = fetchurl {
-    url = "mirror://sourceforge/fuse/${name}.tar.gz";
-    sha256 = "071r6xjgssy8vwdn6m28qq1bqxsd2bphcd2mzhq0grf5ybm87sqb";
+let
+  mkFuse = args: callPackage (import ./common.nix args) {
+    inherit utillinux;
   };
-  
-  configureFlags = "--disable-kernel-module";
-  
-  buildInputs = [ utillinux ];
-  
-  inherit utillinux;
+in {
+  fuse_2 = mkFuse {
+    version = "2.9.8";
+    sha256Hash = "0s04ln4k9zvvbjih8ybaa19fxg8xv7dcsz2yrlbk35psnf3l67af";
+  };
 
-  meta = with stdenv.lib; {
-    homepage = http://fuse.sourceforge.net/;
-    description = "Kernel module and library that allows filesystems to be implemented in user space";
-    platforms = platforms.linux;
-    maintainers = [ maintainers.mornfall ];
+  fuse_3 = mkFuse {
+    version = "3.3.0";
+    sha256Hash = "1pwrnfm8jkxxqhrjz0v1gaw36hshgznchyj961qdk2y697y4zp19";
   };
 }

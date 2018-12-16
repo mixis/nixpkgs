@@ -1,34 +1,41 @@
-{ stdenv, fetchurl, iptables, python, pythonPackages }:
-  
-stdenv.mkDerivation rec {
+{ stdenv, python3Packages, fetchurl, makeWrapper, pandoc
+, coreutils, iptables, nettools, openssh, procps, fetchpatch }:
+
+python3Packages.buildPythonApplication rec {
   name = "sshuttle-${version}";
-  version = "0.61";
+  version = "0.78.4";
 
   src = fetchurl {
-    url = "https://github.com/apenwarr/sshuttle/archive/sshuttle-0.61.tar.gz";
-    sha256 = "1v2v1kbwnmx6ygzhbgqcmyafx914s2p7vjp7l0pf52sa7qkliy9b";
+    sha256 = "0pqk43kd7crqhg6qgnl8kapncwgw1xgaf02zarzypcw64kvdih9h";
+    url = "mirror://pypi/s/sshuttle/${name}.tar.gz";
   };
 
-  preBuild = ''
-   substituteInPlace Documentation/all.do --replace "/bin/ls" "$(type -tP ls)";
-   substituteInPlace Documentation/md2man.py --replace "/usr/bin/env python" "${python}/bin/python"
+  patches = [ ./sudo.patch ];
+
+  nativeBuildInputs = [ makeWrapper python3Packages.setuptools_scm ] ++ stdenv.lib.optional (stdenv.hostPlatform.system != "i686-linux") pandoc;
+  buildInputs =
+    [ coreutils openssh procps nettools ]
+    ++ stdenv.lib.optionals stdenv.isLinux [ iptables ];
+
+  checkInputs = with python3Packages; [ mock pytest pytestrunner ];
+
+  postInstall = let
+    mapPath = f: x: stdenv.lib.concatStringsSep ":" (map f x);
+  in ''
+  wrapProgram $out/bin/sshuttle \
+    --prefix PATH : "${mapPath (x: "${x}/bin") buildInputs}" \
   '';
-
-  phases = "unpackPhase installPhase";
-
-  installPhase = ''
-    mkdir -p $out/bin
-    cp -R . $out
-    ln -s $out/sshuttle $out/bin/sshuttle
-  '';
-  
-
-  buildInputs = [ iptables python pythonPackages.markdown pythonPackages.beautifulsoup ];
 
   meta = with stdenv.lib; {
-    homepage = https://github.com/apenwarr/sshuttle;
+    homepage = https://github.com/sshuttle/sshuttle/;
     description = "Transparent proxy server that works as a poor man's VPN";
-    maintainers = with maintainers; [ iElectric ];
+    longDescription = ''
+      Forward connections over SSH, without requiring administrator access to the
+      target network (though it does require Python 2 at both ends).
+      Works with Linux and Mac OS and supports DNS tunneling.
+    '';
+    license = licenses.gpl2;
+    maintainers = with maintainers; [ domenkozar ];
     platforms = platforms.unix;
   };
 }

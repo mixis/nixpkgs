@@ -1,18 +1,30 @@
-{ stdenv, fetchurl }:
+{ stdenv, fetchFromGitHub, which }:
 
 stdenv.mkDerivation rec {
-  name = "rhash-1.3.3";
+  version = "1.3.6";
+  name = "rhash-${version}";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/rhash/${name}-src.tar.gz";
-    sha1 = "0981bdc98ba7ef923b1a6cd7fd8bb0374cff632e";
+  src = fetchFromGitHub {
+    owner = "rhash";
+    repo = "RHash";
+    rev = "v${version}";
+    sha256 = "1c8gngjj34ylx1f56hjbvml22bif0bx1b88dx2cyxbix8praxqh7";
   };
 
-  installFlags = [ "DESTDIR=$(out)" "PREFIX=/" ];
+  nativeBuildInputs = [ which ];
+
+  # configure script is not autotools-based, doesn't support these options
+  configurePlatforms = [ ];
+
+  doCheck = false; # fails
+
+  installTargets = [ "install" "install-lib-shared" "install-lib-so-link" ];
+  postInstall = "make -C librhash install-headers";
 
   meta = with stdenv.lib; {
     homepage = http://rhash.anz.ru;
-    description = "Console utility for computing and verifying hash sums of files";
-    platforms = platforms.linux;
+    description = "Console utility and library for computing and verifying hash sums of files";
+    platforms = platforms.all;
+    maintainers = [ maintainers.andrewrk ];
   };
 }
